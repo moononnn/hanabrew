@@ -33,7 +33,9 @@ Hana 插件面板 → 找到「花酿」→ 确认已启用（默认启用）。
 | Skill | 作用 | 安装方式 |
 |-------|------|---------|
 | `tavern-cards`（写卡流程） | 编写 SillyTavern 角色卡和世界书 | 推荐从 [ai4rpg/tavern-cards](https://github.com/ai4rpg/tavern-cards) 安装（感谢作者提供的写卡 skill） |
-| `hanabrew-card-testing`（花酿测卡流程） | 在花酿中导入和测试角色卡 | 已安装，助手装 skill 后可用 |
+| `hanabrew-card-testing`（花酿测卡流程） | 在花酿中导入和测试角色卡 | 插件包内的 `skills/hanabrew-card-testing/` 文件夹复制到 `.hanako/skills/` 下重启生效 |
+
+> **安装 skill 的方法**：把你下载的插件包解压，找到 `skills/` 文件夹，把里面每个 skill 文件夹复制到 `C:\Users\<你的用户名>\.hanako\skills\` 下（如果没有这个文件夹就自己建一个），然后重启 HanaAgent。
 
 悠米和绯月可以通过 agent 工具直接读写 ST 数据：
 
@@ -61,6 +63,12 @@ Hana 插件面板 → 找到「花酿」→ 确认已启用（默认启用）。
 - 原生 SillyTavern 1.18.0（完整源码，含 node_modules）
 - HanaAgent 插件 API（页面 + agent 工具）
 - Edge `--app` 模式独立窗口
+
+## 附赠：花酿测卡 skill
+
+花酿内置了 `hanabrew-card-testing` skill，**首次启动时会自动复制到 `~/.hanako/skills/`**（已存在则跳过，不会覆盖你手动安装的版本）。让 AI 助手在花酿里写卡、测卡时自动激活。
+
+如果自动安装没生效，可以手动把 `hanabrew/skills/hanabrew-card-testing/` 文件夹复制到 `~/.hanako/skills/` 下。
 
 ## 许可
 
