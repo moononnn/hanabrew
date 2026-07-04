@@ -1,0 +1,40 @@
+{
+  "id": "hanabrew",
+  "name": "花酿",
+  "version": "1.0.0",
+  "description": "花酿酒馆 v1.0 — 原生 SillyTavern 1.18.0 引擎。需要 Node.js 18+ 和 Edge 浏览器。角色扮演、写卡测卡、Agent 全透明调试。",
+  "trust": "full-access",
+  "activationEvents": ["onStartup"],
+  "install": {
+    "defaultEnabled": true
+  },
+  "capabilities": [
+    "session",
+    "model.sample",
+    "network.fetch"
+  ],
+  "network": {
+    "allowedHosts": ["*"],
+    "defaultTimeoutMs": 120000,
+    "maxResponseBytes": 1048576
+  },
+  "main": "index.js",
+  "contributes": {
+    "page": {
+      "title": "花酿",
+      "route": "/page"
+    },
+    "routes": ["./routes/page-entry.js"],
+    "tools": [
+      "./tools/tavern-list-characters.js",
+      "./tools/tavern-load-character.js",
+      "./tools/tavern-save-character.js",
+      "./tools/tavern-delete-character.js",
+      "./tools/tavern-import-character.js",
+      "./tools/tavern-chat.js",
+      "./tools/tavern-debug.js",
+      "./tools/tavern-worldbook.js",
+      "./tools/tavern-settings.js"
+    ]
+  }
+}
