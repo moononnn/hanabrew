@@ -93,7 +93,7 @@ async function ensureServer() {
   _startingPromise = (async () => {
     appendLog({ ts: new Date().toISOString(), event: 'st.start.begin' });
 
-    // 固定端口（每次打开花酿用同一个，悠米不用关心端口变化）
+    // 固定端口（每次打开花酿用同一个，助手不用关心端口变化）
     // 如果端口被占用会自动 fallback 到随机端口
     const ST_PORT = 18500;
     let port = ST_PORT;
