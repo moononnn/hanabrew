@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { appendFileSync, mkdirSync, existsSync } from 'node:fs';
 
 import { spawnBrowser } from '../lib/browser.js';
+import { ensureStDeps } from '../backend/ensure-deps.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ST_DIR = join(__dirname, '..', 'sillytavern');
@@ -325,9 +326,104 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
 </html>`;
 }
 
+/** 依赖安装/失败状态页 */
+function renderDepsPage(deps) {
+  const escape = (s) => String(s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const installing = deps.status === 'installing';
+  const refresh = installing ? `<meta http-equiv="refresh" content="5">` : "";
+  const detail = deps.message && deps.status === 'failed' ? `
+    <details style="margin-top:16px">
+      <summary style="cursor:pointer;color:#94a3b8;font-size:12px">安装错误详情</summary>
+      <pre style="background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;font-size:11px;color:#94a3b8;max-height:200px;overflow:auto;margin-top:4px;white-space:pre-wrap">${escape(deps.message)}</pre>
+    </details>` : "";
+  const body = installing ? `
+    <div class="row">
+      <div class="icon installing">…</div>
+      <div class="label">
+        <div class="row-title">正在安装酒馆引擎依赖</div>
+        <div class="row-sub">第一次使用需要下载依赖（约几百 MB），可能需要几分钟。页面会自动刷新，装好后自动进入酒馆。</div>
+      </div>
+    </div>` : `
+    <div class="row">
+      <div class="icon err">X</div>
+      <div class="label">
+        <div class="row-title">依赖安装失败</div>
+        <div class="row-sub">${escape(deps.message || '未知错误')}</div>
+      </div>
+    </div>
+    <div class="actions">
+      <a href="/page?retryDeps=1" class="btn">强制重试</a>
+    </div>
+    <div class="err-box">
+      <div class="err-title">手动安装方案（网络实在不行时）</div>
+      <div class="err-text">
+        1. 到花酿的 GitHub Release 页面下载「依赖包」（deps zip）<br>
+        2. 解压后把 node_modules 文件夹放进插件目录的 sillytavern/ 下<br>
+        3. 刷新本页即可
+      </div>
+    </div>`;
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>花酿酒馆</title>
+${refresh}
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f1729 100%);
+    color: #e0e0e0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .card {
+    background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px; padding: 32px 40px; max-width: 560px; width: 100%;
+  }
+  .title { font-size: 24px; font-weight: 600; margin-bottom: 4px; color: #fff; }
+  .subtitle { font-size: 13px; color: #94a3b8; margin-bottom: 24px; }
+  .row {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px; margin-bottom: 8px;
+  }
+  .icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+  .icon.err { background: #ef4444; color: #fff; }
+  .icon.installing { background: #f59e0b; color: #fff; }
+  .row-title { font-size: 14px; color: #e2e8f0; }
+  .row-sub { font-size: 12px; color: #94a3b8; margin-top: 2px; line-height: 1.5; }
+  .actions { display: flex; gap: 8px; margin-top: 16px; }
+  .btn {
+    background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e0e0e0; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; text-decoration: none; display: inline-block;
+  }
+  .err-box { background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 16px; margin-top: 16px; }
+  .err-title { font-size: 14px; color: #fca5a5; font-weight: 600; margin-bottom: 6px; }
+  .err-text { font-size: 13px; color: #fca5a5; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="title">花酿酒馆</div>
+  <div class="subtitle">SillyTavern 1.18.0 原生引擎 · 助手实时调试</div>
+  ${body}
+  ${detail}
+</div>
+</body>
+</html>`;
+}
+
 /** 注册花酿路由 */
 export default async function registerRoutes(app, ctx = {}) {
   app.get('/page', async (c) => {
+    // 第一步：依赖保障（缺依赖先装，装好才启动 ST）
+    const forceRetry = String(c.req?.url || '').includes('retryDeps=1');
+    const deps = await ensureStDeps(ctx, { force: forceRetry });
+    if (deps.status !== 'ok') {
+      return c.html(renderDepsPage(deps), deps.status === 'installing' ? 200 : 500);
+    }
+
     const status = {
       serverRunning: false,
       serverUrl: '',

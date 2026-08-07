@@ -2,3 +2,9 @@
 *.log
 *.tmp
 .DS_Store
+
+# ST 运行时目录（用户数据/依赖/旧版残留，不入库）
+sillytavern/data/
+sillytavern/backups/
+sillytavern/sillytavern/
+sillytavern/node_modules/
