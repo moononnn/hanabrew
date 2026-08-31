@@ -1,6 +1,6 @@
 {
   "name": "hanabrew",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "花酿酒馆 v0.4.0 — 原生 SillyTavern 1.18.0 引擎 + Agent 调试工具",
   "type": "module",
   "main": "index.js",

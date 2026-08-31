@@ -328,13 +328,29 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
     }
   }
   function serverCopy(text, done, fail) {
-    fetch('/api/copy-url', {
+    var base = pluginBase();
+    var surfaceSession = new URLSearchParams(window.location.search).get('pluginSurfaceSession');
+    fetch(base + '/api/copy-url', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Hana-Plugin-Surface-Session': surfaceSession || '',
+      },
       body: JSON.stringify({ text: text }),
     }).then(function (r) { return r.json(); }).then(function (d) {
       d && d.ok ? done() : fail();
     }).catch(function () { fail(); });
+  }
+  function pluginBase() {
+    var injected = String(window.HANA_PLUGIN_BASE || '').trim();
+    if (injected) return injected.replace(/\/$/, '');
+    var marker = '/api/plugins/';
+    var start = window.location.pathname.indexOf(marker);
+    if (start < 0) return window.location.origin;
+    var rest = window.location.pathname.slice(start + marker.length);
+    var end = rest.indexOf('/');
+    var pluginId = decodeURIComponent(end >= 0 ? rest.slice(0, end) : rest);
+    return window.location.origin + '/api/plugins/' + encodeURIComponent(pluginId);
   }
 </script>
 <div class="card">
@@ -500,23 +516,37 @@ export default async function registerRoutes(app, ctx = {}) {
   });
 }
 
-/** 写入系统剪贴板（Windows 用 PowerShell Set-Clipboard，跨平台回退） */
+/** 写入系统剪贴板（Windows 用 PowerShell Set-Clipboard，跨平台回退；带重试，剪贴板被占用时自动重试） */
 async function copyToSystemClipboard(text) {
-  if (process.platform === 'win32') {
-    const { execFile } = await import('node:child_process');
-    await new Promise((resolve, reject) => {
-      const ps = execFile('powershell.exe', ['-NoProfile', '-Command', 'Set-Clipboard -Value $input'], {
-        windowsHide: true,
-      }, (err) => err ? reject(err) : resolve());
-      ps.stdin?.end(text);
-    });
-  } else {
-    const { execFile } = await import('node:child_process');
-    await new Promise((resolve, reject) => {
-      const cb = execFile('pbcopy', [], { windowsHide: true }, (err) => err ? reject(err) : resolve());
-      cb.stdin?.end(text);
-    });
+  const maxAttempts = 5;
+  const delayMs = 300;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      if (process.platform === 'win32') {
+        const { execFile } = await import('node:child_process');
+        await new Promise((resolve, reject) => {
+          const ps = execFile('powershell.exe', ['-NoProfile', '-Command', 'Set-Clipboard -Value $input'], {
+            windowsHide: true,
+          }, (err) => err ? reject(err) : resolve());
+          ps.stdin?.end(text);
+        });
+      } else {
+        const { execFile } = await import('node:child_process');
+        await new Promise((resolve, reject) => {
+          const cb = execFile('pbcopy', [], { windowsHide: true }, (err) => err ? reject(err) : resolve());
+          cb.stdin?.end(text);
+        });
+      }
+      return;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, delayMs * attempt));
+      }
+    }
   }
+  throw lastErr || new Error('clipboard write failed');
 }
 
 // 暴露给 index.js 用于 onunload 清理
