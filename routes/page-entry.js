@@ -239,7 +239,7 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
   const urlBlock = serverUrl ? `
     <div class="url-box">${escape(serverUrl)}</div>
     <div class="actions">
-      <button onclick="navigator.clipboard.writeText('${escape(serverUrl)}');this.textContent='已复制';setTimeout(()=>this.textContent='复制地址',1500)">复制地址</button>
+      <button onclick="copyUrl(this)">复制地址</button>
       <button onclick="window.location.reload()">刷新状态</button>
     </div>
   ` : "";
@@ -300,6 +300,43 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
 </style>
 </head>
 <body>
+<script>
+  function copyUrl(btn) {
+    var url = ${JSON.stringify(serverUrl || '')};
+    var done = function () { btn.textContent = '已复制'; setTimeout(function () { btn.textContent = '复制地址'; }, 1500); };
+    var fail = function () { btn.textContent = '复制失败'; setTimeout(function () { btn.textContent = '复制地址'; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done, function () { serverCopy(url, done, fail); });
+    } else {
+      legacyCopy(url, done, fail);
+    }
+  }
+  function legacyCopy(text, done, fail) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      if (document.execCommand('copy')) { done(); }
+      else { serverCopy(text, done, fail); }
+    } catch (e) {
+      serverCopy(text, done, fail);
+    } finally {
+      document.body.removeChild(ta);
+    }
+  }
+  function serverCopy(text, done, fail) {
+    fetch('/api/copy-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      d && d.ok ? done() : fail();
+    }).catch(function () { fail(); });
+  }
+</script>
 <div class="card">
   <div class="title">花酿酒馆</div>
   <div class="subtitle">SillyTavern 1.18.0 原生引擎 · 助手实时调试</div>
@@ -446,6 +483,40 @@ export default async function registerRoutes(app, ctx = {}) {
     const statusCode = status.serverRunning ? 200 : 500;
     return c.html(renderStatusPage(status), statusCode);
   });
+
+  // 复制地址到系统剪贴板（Hana webview 里 navigator.clipboard 不可用，走后端最稳）
+  app.post('/api/copy-url', async (c) => {
+    try {
+      const body = await c.req.json();
+      const text = String(body?.text || '');
+      if (!text) return c.json({ ok: false, error: 'empty' }, 400);
+      if (text.length > 10000) return c.json({ ok: false, error: 'too-long' }, 400);
+      await copyToSystemClipboard(text);
+      return c.json({ ok: true });
+    } catch (e) {
+      ctx.log?.error?.('[hanabrew] copy-url failed:', e?.message);
+      return c.json({ ok: false, error: String(e?.message || 'unknown') }, 500);
+    }
+  });
+}
+
+/** 写入系统剪贴板（Windows 用 PowerShell Set-Clipboard，跨平台回退） */
+async function copyToSystemClipboard(text) {
+  if (process.platform === 'win32') {
+    const { execFile } = await import('node:child_process');
+    await new Promise((resolve, reject) => {
+      const ps = execFile('powershell.exe', ['-NoProfile', '-Command', 'Set-Clipboard -Value $input'], {
+        windowsHide: true,
+      }, (err) => err ? reject(err) : resolve());
+      ps.stdin?.end(text);
+    });
+  } else {
+    const { execFile } = await import('node:child_process');
+    await new Promise((resolve, reject) => {
+      const cb = execFile('pbcopy', [], { windowsHide: true }, (err) => err ? reject(err) : resolve());
+      cb.stdin?.end(text);
+    });
+  }
 }
 
 // 暴露给 index.js 用于 onunload 清理
