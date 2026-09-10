@@ -8,6 +8,19 @@
 - 新功能、用户正在等待的修复、交互流程变化：走完整发布流程，创建带安装包的 GitHub Release。
 - 拿不准档位时，先停在本地，不擅自创建 Release。
 
+## 发布工作区
+
+本地正式目录（`<HANA_HOME>/plugins/hanabrew`）只管开发，公开内容从独立克隆推送：
+
+- 发布仓库克隆：`L:\哈娜的工作台\hanabrew`（remote 指向 `moononnn/hanabrew`）
+- 同步脚本：`L:\哈娜的工作台\花酿发布\sync-release.mjs`（清空克隆目录后按规则复制，并加工 manifest 去掉 chat 卡片）
+
+同步脚本排除的内容：轻聊卡片（`routes/card.js`、`tools/tavern-chat.js`、`tools/tavern-open-card.js`、`tests/chat-card.test.js`）、运行时产物、本地开发文档、内置第三方扩展的开发文件与 source map。
+
+公开版必须能独立跑通测试：`tests/` 里的测试会直接加载 `sillytavern/src/` 下的模块（例如 `character-card-parser.js`、`png/encode.js`），所以根 `package.json` 要声明这些 ST 模块用到的 npm 包（当前：`crc`、`png-chunks-extract`、`png-chunk-text`）。以后新增对 ST 模块的测试引用时，同步维护这份依赖。
+
+推送前验证顺序：同步 → 在克隆目录 `npm ci` → `npm test` 全绿 → push → 等 CI 全绿。
+
 ## 本版公开范围
 
 本地正式目录继续保留「轻聊」的代码和入口，供后续继续试用；本次公开版不包含这项功能。打包和公开同步时必须排除轻聊卡片、轻聊工具及其测试，并从公开版 manifest 中移除 `chat` 卡片贡献，同时把 description 里的「轻聊卡片」描述一并去掉（本地版保留该词，因为它描述的是本机真实形态）；不要为了做发布副本而删除正式目录里的本地实现。
