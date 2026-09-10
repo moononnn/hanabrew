@@ -1,18 +1,17 @@
 {
+  "manifestVersion": 1,
   "id": "hanabrew",
   "name": "花酿",
-  "version": "1.0.1",
-  "description": "花酿酒馆 v1.0 — 原生 SillyTavern 1.18.0 引擎。需要 Node.js 18+ 和 Edge 浏览器。角色扮演、写卡测卡、Agent 全透明调试。",
+  "version": "1.1.34",
+  "minAppVersion": "0.938.0",
+  "description": "在 Hana 里运行 SillyTavern：提供完整酒馆、角色来访与伙伴单向导出；角色卡体检支持真实测卡与按节奏连续代笔对戏。",
   "trust": "full-access",
   "activationEvents": [
     "onStartup"
   ],
-  "install": {
-    "defaultEnabled": true
-  },
   "capabilities": [
     "session",
-    "model.sample",
+    "agent",
     "network.fetch"
   ],
   "network": {
@@ -22,25 +21,38 @@
     "defaultTimeoutMs": 120000,
     "maxResponseBytes": 1048576
   },
-  "main": "index.js",
   "contributes": {
     "page": {
-      "title": "花酿",
-      "route": "/page"
+      "title": {
+        "zh": "花酿 · 内嵌酒馆",
+        "en": "Hana Brew"
+      },
+      "icon": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z\"/><path d=\"M4 9h16M8 13h3M8 16h6\"/></svg>",
+      "route": "/tavern"
     },
-    "routes": [
-      "./routes/page-entry.js"
-    ],
-    "tools": [
-      "./tools/tavern-list-characters.js",
-      "./tools/tavern-load-character.js",
-      "./tools/tavern-save-character.js",
-      "./tools/tavern-delete-character.js",
-      "./tools/tavern-import-character.js",
-      "./tools/tavern-chat.js",
-      "./tools/tavern-debug.js",
-      "./tools/tavern-worldbook.js",
-      "./tools/tavern-settings.js"
+    "cards": [
+      {
+        "id": "visitor",
+        "type": "webview",
+        "title": "花酿 · 来访",
+        "description": "从首页选择酒馆角色来 Hana，或把 Hana 伙伴带去酒馆。",
+        "route": "/card/visitor",
+        "cardForm": "flush",
+        "titlebar": "solid",
+        "realization": "page",
+        "icon": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M6 20v-2.5A3.5 3.5 0 0 1 9.5 14h5a3.5 3.5 0 0 1 3.5 3.5V20\"/><circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M19 5v6M16 8h6\"/></svg>"
+      },
+      {
+        "id": "theater",
+        "type": "webview",
+        "title": "花酿 · 体检",
+        "description": "先了解测卡怎么用；在当前对话说「帮我测一下这张角色卡」，检查人设、世界书、MVU 和剧情逻辑。",
+        "route": "/card/theater",
+        "cardForm": "framed",
+        "titlebar": "solid",
+        "realization": "card",
+        "icon": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M5 5.5A2.5 2.5 0 0 1 7.5 3h7A2.5 2.5 0 0 1 17 5.5v5a2.5 2.5 0 0 1-2.5 2.5h-4l-3 3v-3H7.5A2.5 2.5 0 0 1 5 10.5z\"/><circle cx=\"17.5\" cy=\"16.5\" r=\"3\"/><path d=\"m19.8 18.8 2 2\"/></svg>"
+      }
     ]
   }
 }
