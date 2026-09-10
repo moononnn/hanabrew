@@ -1,7 +1,7 @@
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import registerPageRoutes, { renderEmbeddedPage } from '../routes/page-entry.js';
+import registerPageRoutes, { renderDepsPage, renderEmbeddedPage } from '../routes/page-entry.js';
 import { stopThemeSync } from '../backend/theme-sync.js';
 
 after(() => stopThemeSync());
@@ -53,4 +53,17 @@ test('manifest 注册了插件页面（内嵌酒馆）与角色卡体检卡片',
   assert.equal(theaterCard?.title, '花酿 · 体检');
   assert.equal(theaterCard?.route, '/card/theater');
   assert.match(theaterCard?.description || '', /帮我测一下这张角色卡/);
+});
+
+test('依赖失败页的「强制重试」走当前入口，不写死 /legacy', () => {
+  const html = renderDepsPage({ status: 'failed', message: '网络不通' });
+  assert.match(html, /href="\?retryDeps=1"/, '重试按钮应是相对链接，主入口与备用入口都能用');
+  assert.doesNotMatch(html, /\/legacy\?retryDeps=1/, '不应把主入口的用户另指到 /legacy');
+  assert.match(html, /依赖安装失败/);
+});
+
+test('依赖安装中的页面会自动刷新', () => {
+  const html = renderDepsPage({ status: 'installing' });
+  assert.match(html, /http-equiv="refresh"/);
+  assert.match(html, /正在安装酒馆引擎依赖/);
 });

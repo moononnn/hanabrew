@@ -442,7 +442,7 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
 }
 
 /** 依赖安装/失败状态页 */
-function renderDepsPage(deps) {
+export function renderDepsPage(deps) {
   const escape = (s) => String(s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const installing = deps.status === 'installing';
   const refresh = installing ? `<meta http-equiv="refresh" content="5">` : "";
@@ -467,7 +467,7 @@ function renderDepsPage(deps) {
       </div>
     </div>
     <div class="actions">
-      <a href="/legacy?retryDeps=1" class="btn">强制重试</a>
+      <a href="?retryDeps=1" class="btn">强制重试</a>
     </div>
     <div class="err-box">
       <div class="err-title">手动安装方案（网络实在不行时）</div>
@@ -582,18 +582,21 @@ export default async function registerRoutes(app, ctx = {}) {
 
   // Hana 页面默认内嵌完整 ST；旧 Edge 酒馆仍由 /legacy 提供备用入口。
   app.get('/tavern', async (c) => {
+    // 依赖没就绪时直接给完整的依赖页（自动刷新 + 强制重试 + 手动兜底），
+    // 不把第一次用的人丢在一个只能“重新启动”的错误态里。
+    const forceRetry = String(c.req?.url || '').includes('retryDeps=1');
+    const deps = await ensureStDeps(ctx, { force: forceRetry });
+    if (deps.status !== 'ok') {
+      return c.html(renderDepsPage(deps), deps.status === 'installing' ? 200 : 500);
+    }
+
     let serverUrl = '';
     let error = null;
-    const deps = await ensureStDeps(ctx);
-    if (deps.status !== 'ok') {
-      error = deps.message || 'SillyTavern 依赖尚未就绪。';
-    } else {
-      try {
-        serverUrl = await ensureServer();
-      } catch (e) {
-        error = e.message;
-        ctx.log?.error?.('[hanabrew] Embedded ST failed:', e.message);
-      }
+    try {
+      serverUrl = await ensureServer();
+    } catch (e) {
+      error = e.message;
+      ctx.log?.error?.('[hanabrew] Embedded ST failed:', e.message);
     }
     return c.html(renderEmbeddedPage({ serverUrl, error }), serverUrl ? 200 : 500);
   });
