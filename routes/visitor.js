@@ -18,7 +18,7 @@ import {
 import { readFileSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { paths } from '../backend/store.js';
-import { escapeHtml, initials } from './card.js';
+import { escapeHtml, initials } from '../lib/html.js';
 
 function renderCharacters(characters, ctx = {}, visitorByCharacter = {}) {
   if (!characters.length) {
