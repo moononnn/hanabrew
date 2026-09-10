@@ -12,12 +12,28 @@
  * @returns {object} { text, usage }
  */
 export async function callLLM({ messages, characterName }, ctx = {}) {
-  const { readSettings } = await import('./store.js');
+  const { readSettings, readSecrets } = await import('./store.js');
   const settings = await readSettings(ctx);
 
-  const apiUrl = (settings.apiUrl || settings.baseUrl || 'https://api.siliconflow.cn/v1').replace(/\/+$/, '');
-  const apiKey = settings.apiKey || '';
-  const model = settings.model || 'deepseek-ai/DeepSeek-V3';
+  // 优先读 UI 配的 custom 通道（MiniMax），回退到顶层 apiUrl/apiKey/model（旧式配置）
+  const oai = settings.oai_settings || {};
+  const customUrl = String(oai.custom_url || '').trim();
+  const customModel = String(oai.custom_model || '').trim();
+  let apiUrl = '';
+  let apiKey = '';
+  let model = '';
+  if (customUrl && customModel) {
+    apiUrl = customUrl.replace(/\/+$/, '');
+    model = customModel;
+    const secrets = await readSecrets(ctx);
+    const customKeys = secrets.api_key_custom || secrets.api_key_minimax || [];
+    apiKey = (Array.isArray(customKeys) ? customKeys.find((k) => k?.active)?.value : customKeys) || '';
+  }
+  if (!apiKey) {
+    apiUrl = (settings.apiUrl || settings.baseUrl || 'https://api.siliconflow.cn/v1').replace(/\/+$/, '');
+    apiKey = settings.apiKey || '';
+    model = settings.model || 'deepseek-ai/DeepSeek-V3';
+  }
 
   if (!apiKey) {
     throw new Error('未配置 API Key。请在花酿设置中填写。');
