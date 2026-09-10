@@ -1,4 +1,4 @@
-﻿node_modules
+node_modules
 *.log
 *.tmp
 .DS_Store
@@ -8,3 +8,25 @@ sillytavern/data/
 sillytavern/backups/
 sillytavern/sillytavern/
 sillytavern/node_modules/
+
+# 运行时生成的文件（ST 首次启动会复制，主题同步会写入）
+sillytavern/config.yaml
+sillytavern/public/hana-theme.json
+
+# 不入库的实验文件与原始包信息
+st-original-package.json
+backend/agent-gateway*.js
+
+# 本地开发文档：项目工作日志与发布间隔账本只留本机
+PROJECT_LOG.md
+PENDING_CHANGES.md
+
+# 内置第三方扩展：只归档运行所需文件，开发文件与 source map 不入库
+sillytavern/public/scripts/extensions/third-party/*/.git-vendored/
+sillytavern/public/scripts/extensions/third-party/*/.github/
+sillytavern/public/scripts/extensions/third-party/*/.vscode/
+sillytavern/public/scripts/extensions/third-party/*/@types/
+sillytavern/public/scripts/extensions/third-party/*/docs/
+sillytavern/public/scripts/extensions/third-party/*/src/
+sillytavern/public/scripts/extensions/third-party/*/tests/
+sillytavern/public/scripts/extensions/third-party/*/**/*.map
