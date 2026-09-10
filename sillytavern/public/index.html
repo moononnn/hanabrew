@@ -8212,6 +8212,36 @@
             documentHeight();
         });
     </script>
+<!-- HANABREW_THEME_SYNC --><script>
+// 花酿 · 跟随 Hana 主题（v2 静态文件方案）：轮询同源 /hana-theme.json，读 { dark }。
+// 由花酿后端每 2 秒把 Hana 宿主主题写成 hana-theme.json；
+// 不经过 ST settings（前端 saveSettings 会全量覆盖 power_user，造成黑白拉锯抖动）。
+// 暗色覆盖层在「薄荷手帐 · 简约」主题 custom_css，只有用该主题才生效。
+(function () {
+  var KEY = "hana-dark";
+  var lastDark = null;
+  function applyDark(dark) {
+    dark = !!dark;
+    if (dark === lastDark) return;
+    lastDark = dark;
+    document.documentElement.classList.toggle(KEY, dark);
+    document.body.classList.toggle(KEY, dark);
+  }
+  function poll() {
+    try {
+      fetch("/hana-theme.json?t=" + Date.now(), { method: "GET", cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j) return;
+          applyDark(j.dark);
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+  poll();
+  setInterval(poll, 2000);
+})();
+</script><!-- /HANABREW_THEME_SYNC -->
 </body>
 
 </html>

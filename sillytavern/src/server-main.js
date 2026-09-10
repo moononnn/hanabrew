@@ -103,6 +103,9 @@ https.globalAgent = new https.Agent({ keepAlive: cliArgs.enableKeepAlive });
 const app = express();
 app.use(helmet({
     contentSecurityPolicy: false,
+    // Hana 内嵌酒馆通过本地 iframe 承载；保留 CSP 关闭策略，同时关闭默认跨源阻拦。
+    frameguard: false,
+    crossOriginResourcePolicy: false,
 }));
 app.use(compression());
 app.use(responseTime());

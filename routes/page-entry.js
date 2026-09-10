@@ -1,10 +1,10 @@
 /**
- * 花酿 v0.4.0 — 路由入口 + ST 子进程管理 + 浏览器启动
+ * 花酿 — ST 子进程管理、Hana 内嵌 WebUI 与 Edge 备用入口；版本号一律从 manifest.json 读取
  *
  * 工作流：
- * 1. 访问 /page → ensureServer() 查找空闲端口 → spawn ST server.js
- * 2. ST 自行管理所有 API（settings、secrets、模型列表、聊天等），零兼容问题
- * 3. 等待 ST 启动完成 → 弹出 Edge 独立窗口
+ * 1. 访问 /tavern → ensureServer() 查找空闲端口 → spawn ST server.js → Hana iframe 内嵌
+ * 2. 访问 /legacy → 复用同一 ST 服务 → 弹出 Edge 独立窗口
+ * 3. ST 自行管理 settings、secrets、模型列表和完整酒馆界面
  * 4. 助手通过 agent 工具读 ST 的 data/ 目录
  */
 
@@ -13,7 +13,7 @@ import { createServer } from 'node:net';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import { appendFileSync, mkdirSync, existsSync } from 'node:fs';
+import { appendFileSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync, rmSync } from 'node:fs';
 
 import { spawnBrowser } from '../lib/browser.js';
 import { ensureStDeps } from '../backend/ensure-deps.js';
@@ -22,6 +22,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ST_DIR = join(__dirname, '..', 'sillytavern');
 const LOG_DIR = join(process.env.APPDATA || tmpdir(), 'hanabrew', 'logs');
 const LOG_FILE = join(LOG_DIR, 'request-log.jsonl');
+const MANIFEST_PATH = join(__dirname, '..', 'manifest.json');
+
+/** 插件版本号的唯一来源是 manifest.json，避免注释和状态页各写一份手抄版 */
+function pluginVersion() {
+  try {
+    const v = JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8')).version;
+    return typeof v === 'string' ? v.trim() : '';
+  } catch {
+    return '';
+  }
+}
 
 // ST 子进程状态
 let stProcess = null;
@@ -73,7 +84,7 @@ async function waitForStart(port, timeoutMs = 30000) {
 }
 
 /** 启动 ST 服务器（如果尚未运行），带并发保护 */
-async function ensureServer() {
+export async function ensureServer() {
   // 如果已有启动中的 Promise，复用
   if (_startingPromise) return _startingPromise;
 
@@ -131,7 +142,7 @@ async function ensureServer() {
       });
     } catch (e) {
       if (e.code === 'ENOENT') {
-        throw new Error('未检测到 Node.js。请先安装 Node.js 18+（https://nodejs.org）');
+        throw new Error('未检测到 Node.js。请先安装 Node.js 20+（https://nodejs.org）');
       }
       throw new Error('启动 ST 失败: ' + e.message);
     }
@@ -182,20 +193,118 @@ function startTavernWindow(serverUrl) {
   // 清理旧临时目录
   setImmediate(() => {
     try {
-      const fs = require('node:fs');
-      const path = require('node:path');
-      const entries = fs.readdirSync(tmpdir());
+      const entries = readdirSync(tmpdir());
       const oldDirs = entries
         .filter(n => n.startsWith('hanabrew-chrome-') && n !== `hanabrew-chrome-${stamp}`)
-        .map(n => ({ name: n, path: path.join(tmpdir(), n), mtime: fs.statSync(path.join(tmpdir(), n)).mtimeMs }))
+        .map(n => ({ name: n, path: join(tmpdir(), n), mtime: statSync(join(tmpdir(), n)).mtimeMs }))
         .sort((a, b) => b.mtime - a.mtime);
       for (const d of oldDirs.slice(3)) {
-        try { fs.rmSync(d.path, { recursive: true, force: true }); } catch {}
+        try { rmSync(d.path, { recursive: true, force: true }); } catch {}
       }
     } catch {}
   });
 
   return spawnBrowser(serverUrl, { userDataDir });
+}
+
+/** Hana 内嵌酒馆页面：复用本地 ST 服务，但不启动外部浏览器。 */
+export function renderEmbeddedPage({ serverUrl, error }) {
+  const escape = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[char]));
+  const body = serverUrl
+    ? `<iframe id="st-frame" src="${escape(serverUrl)}" title="SillyTavern" allow="clipboard-read; clipboard-write; fullscreen"></iframe>`
+    : `<main class="error-card"><h1>酒馆暂时没有启动</h1><p>${escape(error || '未知错误')}</p><button type="button" onclick="location.reload()">重新启动</button></main>`;
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>花酿 · 内嵌酒馆</title>
+<style>
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #f5efe4; }
+  body { font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; color: #2a2622; }
+  #st-frame { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
+  .error-card { width: min(560px, calc(100% - 40px)); margin: 14vh auto 0; padding: 28px; box-sizing: border-box; border: 1px solid #d8cfbe; border-radius: 14px; background: #fbf7ee; }
+  .error-card h1 { margin: 0 0 8px; font-size: 20px; }
+  .error-card p { color: #6b6158; line-height: 1.6; white-space: pre-wrap; }
+  .error-card button { border: 1px solid #537d96; border-radius: 8px; padding: 8px 14px; color: #537d96; background: transparent; cursor: pointer; }
+</style>
+</head>
+<body>
+${body}
+<script>
+window.parent.postMessage({ protocol: 'hana.plugin.ui', version: 1, kind: 'event', type: 'hana.ready' }, '*');
+window.parent.postMessage({ type: 'ready' }, '*');
+</script>
+<script>
+// 花酿 · 内嵌酒馆「跟随 Hana 主题」：轮询宿主主题状态 → postMessage 给酒馆 iframe
+(function () {
+  var frame = document.getElementById('st-frame');
+  if (!frame) return;
+  // 直连宿主原生主题接口（插件页面同源带凭证，稳）
+  var endpoint = '/api/preferences/appearance';
+  var lastDark = null;
+  function isDarkTheme(theme) {
+    return theme === 'midnight' || theme === 'midnight-contrast';
+  }
+  // 兼容多种返回结构：{appearance:{theme}} | {theme} | 直接字符串
+  function extractTheme(state) {
+    if (!state) return '';
+    if (typeof state === 'string') return state;
+    if (state.appearance && state.appearance.theme) return state.appearance.theme;
+    if (state.theme) return state.theme;
+    return '';
+  }
+  function sync() {
+    fetch(endpoint, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (state) {
+        if (!state) return;
+        var theme = extractTheme(state);
+        if (!theme) return;
+        var dark = isDarkTheme(theme);
+        if (dark !== lastDark) {
+          lastDark = dark;
+          frame.contentWindow.postMessage({ type: 'hana-theme-sync', dark: dark, theme: theme }, '*');
+        }
+      })
+      .catch(function () {});
+  }
+  // 页面加载时：优先读 URL 参数（即时生效），随后轮询覆盖
+  try {
+    var urlTheme = new URLSearchParams(location.search).get('hana-theme') || '';
+    if (urlTheme) {
+      lastDark = isDarkTheme(urlTheme);
+      frame.contentWindow.postMessage({ type: 'hana-theme-sync', dark: lastDark, theme: urlTheme }, '*');
+    }
+  } catch (e) {}
+  // 酒馆 iframe 刷新后主动请求当前状态时，立即响应一轮
+  window.addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (d && typeof d === 'object' && d.type === 'hana-theme-sync-request') {
+      fetch(endpoint, { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (state) {
+          if (state) {
+            var theme = extractTheme(state);
+            if (theme) {
+              lastDark = isDarkTheme(theme);
+              frame.contentWindow.postMessage({ type: 'hana-theme-sync', dark: lastDark, theme: theme }, '*');
+            }
+          }
+        })
+        .catch(function () {});
+    }
+  });
+  sync();
+  setInterval(sync, 2000);
+})();
+</script>
+</body>
+</html>`;
 }
 
 /** 状态面板 HTML */
@@ -239,7 +348,7 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
   const urlBlock = serverUrl ? `
     <div class="url-box">${escape(serverUrl)}</div>
     <div class="actions">
-      <button onclick="copyUrl(this)">复制地址</button>
+      <button onclick="navigator.clipboard.writeText('${escape(serverUrl)}');this.textContent='已复制';setTimeout(()=>this.textContent='复制地址',1500)">复制地址</button>
       <button onclick="window.location.reload()">刷新状态</button>
     </div>
   ` : "";
@@ -261,6 +370,12 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
 <title>花酿酒馆</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* 滚动条统一：细薄荷圆条（2026-08-26，深色底适配） */
+  *::-webkit-scrollbar{width:8px;height:8px}
+  *::-webkit-scrollbar-track{background:transparent}
+  *::-webkit-scrollbar-thumb{background:#c9dfd3;border-radius:99px;border:2px solid rgba(10,14,26,.8)}
+  *::-webkit-scrollbar-thumb:hover{background:#5dae8e}
+  *{scrollbar-width:thin;scrollbar-color:#c9dfd3 transparent}
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f1729 100%);
@@ -300,59 +415,6 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
 </style>
 </head>
 <body>
-<script>
-  function copyUrl(btn) {
-    var url = ${JSON.stringify(serverUrl || '')};
-    var done = function () { btn.textContent = '已复制'; setTimeout(function () { btn.textContent = '复制地址'; }, 1500); };
-    var fail = function () { btn.textContent = '复制失败'; setTimeout(function () { btn.textContent = '复制地址'; }, 1500); };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(done, function () { serverCopy(url, done, fail); });
-    } else {
-      legacyCopy(url, done, fail);
-    }
-  }
-  function legacyCopy(text, done, fail) {
-    var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      if (document.execCommand('copy')) { done(); }
-      else { serverCopy(text, done, fail); }
-    } catch (e) {
-      serverCopy(text, done, fail);
-    } finally {
-      document.body.removeChild(ta);
-    }
-  }
-  function serverCopy(text, done, fail) {
-    var base = pluginBase();
-    var surfaceSession = new URLSearchParams(window.location.search).get('pluginSurfaceSession');
-    fetch(base + '/api/copy-url', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Hana-Plugin-Surface-Session': surfaceSession || '',
-      },
-      body: JSON.stringify({ text: text }),
-    }).then(function (r) { return r.json(); }).then(function (d) {
-      d && d.ok ? done() : fail();
-    }).catch(function () { fail(); });
-  }
-  function pluginBase() {
-    var injected = String(window.HANA_PLUGIN_BASE || '').trim();
-    if (injected) return injected.replace(/\/$/, '');
-    var marker = '/api/plugins/';
-    var start = window.location.pathname.indexOf(marker);
-    if (start < 0) return window.location.origin;
-    var rest = window.location.pathname.slice(start + marker.length);
-    var end = rest.indexOf('/');
-    var pluginId = decodeURIComponent(end >= 0 ? rest.slice(0, end) : rest);
-    return window.location.origin + '/api/plugins/' + encodeURIComponent(pluginId);
-  }
-</script>
 <div class="card">
   <div class="title">花酿酒馆</div>
   <div class="subtitle">SillyTavern 1.18.0 原生引擎 · 助手实时调试</div>
@@ -372,7 +434,7 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
   ${logSection}
 
   <div class="footer">
-    花酿 v1.0 · ST 1.18.0 原生引擎 · 独立 Edge 窗口运行
+    ${pluginVersion() ? `花酿 v${pluginVersion()} · ` : ''}ST 1.18.0 原生引擎 · 独立 Edge 窗口运行
   </div>
 </div>
 </body>
@@ -405,7 +467,7 @@ function renderDepsPage(deps) {
       </div>
     </div>
     <div class="actions">
-      <a href="/page?retryDeps=1" class="btn">强制重试</a>
+      <a href="/legacy?retryDeps=1" class="btn">强制重试</a>
     </div>
     <div class="err-box">
       <div class="err-title">手动安装方案（网络实在不行时）</div>
@@ -425,6 +487,12 @@ function renderDepsPage(deps) {
 ${refresh}
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* 滚动条统一：细薄荷圆条（2026-08-26，深色底适配） */
+  *::-webkit-scrollbar{width:8px;height:8px}
+  *::-webkit-scrollbar-track{background:transparent}
+  *::-webkit-scrollbar-thumb{background:#c9dfd3;border-radius:99px;border:2px solid rgba(10,14,26,.8)}
+  *::-webkit-scrollbar-thumb:hover{background:#5dae8e}
+  *{scrollbar-width:thin;scrollbar-color:#c9dfd3 transparent}
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f1729 100%);
@@ -469,7 +537,19 @@ ${refresh}
 
 /** 注册花酿路由 */
 export default async function registerRoutes(app, ctx = {}) {
-  app.get('/page', async (c) => {
+  // 内嵌酒馆跟随 Hana 主题：路由注册时再做一次幂等启动，兼容旧宿主未触发生命周期的情况。
+  try {
+    const themeSync = await import('../backend/theme-sync.js');
+    themeSync.startThemeSync(ctx);
+    // 保留 theme-sync 接口（幂等）
+    app.get('/api/tavern/theme-sync', (c) => {
+      return c.json(themeSync.readHanaThemeState());
+    });
+  } catch (e) {
+    ctx.log?.warn?.('[hanabrew] theme-sync start failed:', e.message);
+  }
+
+  app.get('/legacy', async (c) => {
     // 第一步：依赖保障（缺依赖先装，装好才启动 ST）
     const forceRetry = String(c.req?.url || '').includes('retryDeps=1');
     const deps = await ensureStDeps(ctx, { force: forceRetry });
@@ -500,55 +580,34 @@ export default async function registerRoutes(app, ctx = {}) {
     return c.html(renderStatusPage(status), statusCode);
   });
 
-  // 复制地址到系统剪贴板（Hana webview 里 navigator.clipboard 不可用，走后端最稳）
-  app.post('/api/copy-url', async (c) => {
-    try {
-      const body = await c.req.json();
-      const text = String(body?.text || '');
-      if (!text) return c.json({ ok: false, error: 'empty' }, 400);
-      if (text.length > 10000) return c.json({ ok: false, error: 'too-long' }, 400);
-      await copyToSystemClipboard(text);
-      return c.json({ ok: true });
-    } catch (e) {
-      ctx.log?.error?.('[hanabrew] copy-url failed:', e?.message);
-      return c.json({ ok: false, error: String(e?.message || 'unknown') }, 500);
+  // Hana 页面默认内嵌完整 ST；旧 Edge 酒馆仍由 /legacy 提供备用入口。
+  app.get('/tavern', async (c) => {
+    let serverUrl = '';
+    let error = null;
+    const deps = await ensureStDeps(ctx);
+    if (deps.status !== 'ok') {
+      error = deps.message || 'SillyTavern 依赖尚未就绪。';
+    } else {
+      try {
+        serverUrl = await ensureServer();
+      } catch (e) {
+        error = e.message;
+        ctx.log?.error?.('[hanabrew] Embedded ST failed:', e.message);
+      }
     }
+    return c.html(renderEmbeddedPage({ serverUrl, error }), serverUrl ? 200 : 500);
   });
-}
 
-/** 写入系统剪贴板（Windows 用 PowerShell Set-Clipboard，跨平台回退；带重试，剪贴板被占用时自动重试） */
-async function copyToSystemClipboard(text) {
-  const maxAttempts = 5;
-  const delayMs = 300;
-  let lastErr = null;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      if (process.platform === 'win32') {
-        const { execFile } = await import('node:child_process');
-        await new Promise((resolve, reject) => {
-          const ps = execFile('powershell.exe', ['-NoProfile', '-Command', 'Set-Clipboard -Value $input'], {
-            windowsHide: true,
-          }, (err) => err ? reject(err) : resolve());
-          ps.stdin?.end(text);
-        });
-      } else {
-        const { execFile } = await import('node:child_process');
-        await new Promise((resolve, reject) => {
-          const cb = execFile('pbcopy', [], { windowsHide: true }, (err) => err ? reject(err) : resolve());
-          cb.stdin?.end(text);
-        });
-      }
-      return;
-    } catch (e) {
-      lastErr = e;
-      if (attempt < maxAttempts) {
-        await new Promise(r => setTimeout(r, delayMs * attempt));
-      }
-    }
-  }
-  throw lastErr || new Error('clipboard write failed');
+  // 兼容旧书签与旧宿主 page 入口：转入内嵌酒馆，不再默认弹 Edge。
+  app.get('/page', (c) => {
+    const target = new URL(c.req.url);
+    target.pathname = target.pathname.replace(/\/page$/, '/tavern');
+    return c.redirect(target.toString());
+  });
 }
 
 // 暴露给 index.js 用于 onunload 清理
 export function getStProcess() { return stProcess; }
 export function setStProcess(p) { stProcess = p; globalThis.__hanabrew_state._stProcess = p; }
+export function getStServerUrl() { return stServerUrl; }
+export function getStPort() { return stPort; }
