@@ -1,7 +1,7 @@
 # 花酿（Hanabrew）
 
 > 把一整套原生 SillyTavern 装进 Hana，顺便留一间试卡间。
-> 当前版本 v1.1.34 · 署名：`moononnn & 小花`
+> 当前版本 v1.1.35 · 署名：`moononnn & 小花`
 
 ## ⚠️ 先看这里
 
