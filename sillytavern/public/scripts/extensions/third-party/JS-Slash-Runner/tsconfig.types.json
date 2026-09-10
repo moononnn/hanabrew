@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "rootDir": ".",
+    "outDir": "dist",
+    "types": [
+      "jquery"
+    ],
+    "paths": {},
+    "moduleDetection": "auto",
+    "moduleResolution": "bundler",
+    "importHelpers": true,
+    "allowUmdGlobalAccess": true,
+    "allowSyntheticDefaultImports": true,
+    "strictBindCallApply": true,
+    "allowJs": true,
+    "checkJs": false,
+    "sourceMap": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "*.d.ts",
+    "@types",
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+  ]
+}
