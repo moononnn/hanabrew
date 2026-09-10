@@ -12,8 +12,8 @@
 
 本地正式目录（`<HANA_HOME>/plugins/hanabrew`）只管开发，公开内容从独立克隆推送：
 
-- 发布仓库克隆：`L:\哈娜的工作台\hanabrew`（remote 指向 `moononnn/hanabrew`）
-- 同步脚本：`L:\哈娜的工作台\花酿发布\sync-release.mjs`（清空克隆目录后按规则复制，并加工 manifest 去掉 chat 卡片）
+- 发布仓库克隆：`<发布工作区>/hanabrew`（remote 指向 `moononnn/hanabrew`）
+- 同步脚本：`<发布工具目录>/sync-release.mjs`（清空克隆目录后按规则复制，并加工 manifest 去掉 chat 卡片）
 
 同步脚本排除的内容：轻聊卡片（`routes/card.js`、`tools/tavern-chat.js`、`tools/tavern-open-card.js`、`tests/chat-card.test.js`）、运行时产物、本地开发文档、内置第三方扩展的开发文件与 source map。
 
@@ -85,7 +85,7 @@
 - 在全新目录解压，能识别插件入口和 skill。
 - 确认首次访问会自动安装依赖，依赖缺失和失败重试页面可用。
 - 用旧版 `st-data` 做升级模拟，角色、聊天、世界书和来访状态不被误删。
-- 确认运行数据写入 `%APPDATA%\\hanabrew\\`，不回写安装包源码目录。
+- 确认运行数据（状态、日志、用户数据）写入 `%APPDATA%\\hanabrew\\`，不回写安装包源码目录；主题跟随会往内置酒馆的 `public/` 写一个可再生的主题缓存文件，属预期行为。
 
 ### C：外传红线
 

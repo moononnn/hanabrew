@@ -69,15 +69,15 @@ test('tavernChatAppend 续接酒馆聊天文件并以酒馆格式追加对话', 
   mkdirSync(charDir, { recursive: true });
   const existingFile = join(charDir, '已有聊天.jsonl');
   writeFileSync(existingFile, [
-    JSON.stringify({ chat_metadata: {}, user_name: '林小月', character_name: '测试角色' }),
+    JSON.stringify({ chat_metadata: {}, user_name: '测试用户', character_name: '测试角色' }),
     JSON.stringify({ name: '测试角色', is_user: false, send_date: new Date().toISOString(), mes: '开场白。', extra: {} }),
   ].join('\n') + '\n', 'utf8');
 
-  // 预置 settings.json 让 tavernUserName 读到 林小月 + callLLM 读到 custom 配置
+  // 预置 settings.json 让 tavernUserName 读到 测试用户 + callLLM 读到 custom 配置
   writeFileSync(
     join(process.env.APPDATA, 'hanabrew', 'st-data', 'default-user', 'settings.json'),
     JSON.stringify({
-      username: '林小月',
+      username: '测试用户',
       power_user: {},
       oai_settings: { custom_url: 'https://api.minimaxi.com/v1', custom_model: 'MiniMax-M3' },
     }),
@@ -114,7 +114,7 @@ test('tavernChatAppend 续接酒馆聊天文件并以酒馆格式追加对话', 
     assert.equal(lines.length, 4); // metadata + 开场白 + 用户 + 回复
     const userLine = JSON.parse(lines[2]);
     const replyLine = JSON.parse(lines[3]);
-    assert.equal(userLine.name, '林小月');
+    assert.equal(userLine.name, '测试用户');
     assert.equal(userLine.is_user, true);
     assert.equal(userLine.mes, '你好呀');
     assert.equal(replyLine.name, '测试角色');
