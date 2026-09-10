@@ -1,7 +1,7 @@
 {
   "name": "hanabrew",
-  "version": "1.1.35",
-  "description": "花酿酒馆 v1.1.35 — 角色卡体检支持真实测卡与按节奏连续代笔对戏。",
+  "version": "1.1.36",
+  "description": "花酿酒馆 v1.1.36 — 角色卡体检支持真实测卡与按节奏连续代笔对戏。",
   "type": "module",
   "main": "index.js",
   "license": "AGPL-3.0",

@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "hanabrew",
   "name": "花酿",
-  "version": "1.1.35",
+  "version": "1.1.36",
   "minAppVersion": "0.938.0",
   "description": "在 Hana 里运行 SillyTavern：提供完整酒馆、角色来访与伙伴单向导出；角色卡体检支持真实测卡与按节奏连续代笔对戏。",
   "trust": "full-access",
