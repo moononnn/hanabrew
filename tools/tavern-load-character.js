@@ -8,11 +8,19 @@ export const parameters = {
   required: ["characterId"]
 };
 export async function execute({ characterId }, ctx = {}) {
+  const { getCharacter } = await import("../backend/characters.js");
   const { readState, writeState } = await import("../backend/store.js");
+  const character = await getCharacter(characterId, ctx);
+  if (!character) {
+    return {
+      content: [{ type: "text", text: JSON.stringify({ ok: false, error: "找不到这张角色卡。" }) }],
+    };
+  }
   const state = await readState(ctx);
-  state.activeCharacterId = characterId;
+  if (state.activeCharacterId !== character.id) state.activeChatId = null;
+  state.activeCharacterId = character.id;
   await writeState(state, ctx);
   return {
-    content: [{ type: "text", text: JSON.stringify({ ok: true, activeCharacterId: characterId }) }]
+    content: [{ type: "text", text: JSON.stringify({ ok: true, activeCharacterId: character.id }) }]
   };
 }

@@ -8,7 +8,7 @@ export const parameters = {
     greeting: { type: "string" },
     scenario: { type: "string" },
     exampleDialogue: { type: "string" },
-    tags: { type: "string" },
+    tags: { type: "array", items: { type: "string" } },
   },
   required: ["name"]
 };
@@ -23,6 +23,10 @@ export async function execute(input, ctx = {}) {
     result = await createCharacter(input, ctx);
   }
   return {
-    content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+    content: [{
+      type: "text",
+      text: JSON.stringify(result, null, 2)
+        + `\n\n小提示：角色卡「${result?.name || input.name}」也可以做真实测卡。你可以直接说“帮我测一下这张角色卡，重点看看人设、变量或世界书有没有生效”，小花会打开角色卡体检流程。`
+    }]
   };
 }

@@ -9,8 +9,8 @@ export const parameters = {
 };
 export async function execute({ characterId }, ctx = {}) {
   const { deleteCharacter } = await import("../backend/characters.js");
-  await deleteCharacter(characterId, ctx);
+  const result = await deleteCharacter(characterId, ctx);
   return {
-    content: [{ type: "text", text: JSON.stringify({ ok: true }) }]
+    content: [{ type: "text", text: JSON.stringify({ ok: result.deleted === true, ...result }) }]
   };
 }

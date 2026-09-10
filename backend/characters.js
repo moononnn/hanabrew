@@ -3,14 +3,52 @@
 //   - PNG V2 卡片：tEXt chunk 中 keyword="chara" 嵌入 JSON
 //   - JSON 文件：独立的 .json 文件，与 PNG 卡片同级
 
-import { readFileSync, writeFileSync, existsSync, unlinkSync, readdirSync, statSync } from "node:fs";
-import { join, extname, basename } from "node:path";
+import { readFileSync, writeFileSync, existsSync, unlinkSync, readdirSync, statSync, mkdirSync } from "node:fs";
+import { join, extname, basename, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { paths } from "./store.js";
+import { embedCharacterCardPng, isPng, readAvatarPng, readEmbeddedCard } from "./png-card.js";
+
+const DEFAULT_CHARACTER_AVATAR_PATH = fileURLToPath(new URL('../assets/hanako-default.png', import.meta.url));
+const require = createRequire(import.meta.url);
+const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * YAML 只在实际导入 YAML 卡片时按需加载。
+ * 花酿首次启动要先在 sillytavern/ 安装依赖；若顶层静态 import yaml，干净安装包会在生命周期入口加载前就失败。
+ * 优先用插件自身依赖（开发/测试），发布包则回退到 sillytavern/node_modules/yaml。
+ */
+function parseYaml(raw) {
+  let yaml;
+  try {
+    yaml = require('yaml');
+  } catch {
+    try {
+      yaml = require(join(MODULE_DIR, '..', 'sillytavern', 'node_modules', 'yaml'));
+    } catch (error) {
+      throw new Error(`YAML 依赖尚未就绪，请先打开花酿内嵌酒馆完成依赖安装：${error.message}`);
+    }
+  }
+  return yaml.parse(raw);
+}
 
 /**
  * 从 PNG 文件中提取 V2 角色 JSON
  * ST V2 规范：PNG tEXt chunk 中 keyword="chara"，value 为 JSON 字符串
  */
+export function decodeCharaTextValue(value) {
+  const candidates = [String(value || '')];
+  try { candidates.push(Buffer.from(String(value || ''), 'base64').toString('utf8')); } catch {}
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      return parsed.data || parsed;
+    } catch {}
+  }
+  return null;
+}
+
 function extractCharaFromPng(filePath) {
   try {
     const buf = readFileSync(filePath);
@@ -32,14 +70,7 @@ function extractCharaFromPng(filePath) {
         if (nullPos >= 0) {
           const keyword = chunkData.slice(0, nullPos).toString('latin1');
           const value = chunkData.slice(nullPos + 1).toString('latin1');
-          if (keyword === 'chara') {
-            try {
-              const charData = JSON.parse(value);
-              return charData.data || charData;
-            } catch {
-              return null;
-            }
-          }
+          if (keyword === 'chara') return decodeCharaTextValue(value);
         }
       }
 
@@ -56,6 +87,16 @@ function extractCharaFromPng(filePath) {
  */
 function generateId() {
   return `char-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function safeCharacterId(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return generateId();
+  const safe = text
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    .replace(/^\.+$/, '_')
+    .slice(0, 80);
+  return safe || generateId();
 }
 
 /**
@@ -79,8 +120,13 @@ function scanCharacters(charDir) {
       const charData = extractCharaFromPng(filePath);
       if (charData) {
         results.push({
-          id: charData.name || charName,
+          id: charData.id || charData.name || charName,
           name: charData.name || charName,
+          description: charData.description || '',
+          prompt: charData.personality || charData.description || charData.system_prompt || charData.prompt || '',
+          greeting: charData.first_mes || charData.greeting || '',
+          scenario: charData.scenario || '',
+          exampleDialogue: charData.mes_example || charData.exampleDialogue || '',
           tags: charData.tags || [],
           avatarPath: file,
           createdAt: charData.create_date || null,
@@ -123,7 +169,100 @@ function scanCharacters(charDir) {
       } catch { /* skip bad json */ }
     }
   }
-  return results;
+  // Hana 侧的兼容扫描允许读取旧 JSON，但实际 SillyTavern 只认 PNG。
+  // 同一张卡完成 PNG 迁移后，保留旧 JSON 作为数据备份，同时只对外暴露 PNG，避免角色来访出现重复卡。
+  const pngNames = new Set(results.filter((item) => item._fileType === 'png').map((item) => item.name));
+  return results.filter((item) => item._fileType !== 'json' || !pngNames.has(item.name));
+}
+
+async function writeCharacterPng(filePath, character, sourceAvatarPng = null) {
+  const avatarPng = isPng(sourceAvatarPng)
+    ? sourceAvatarPng
+    : await readAvatarPng(null, DEFAULT_CHARACTER_AVATAR_PATH);
+  const card = {
+    spec: 'chara_card_v2',
+    spec_version: '2.0',
+    data: character,
+  };
+  writeFileSync(filePath, embedCharacterCardPng(avatarPng, card));
+}
+
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object || {}, key);
+}
+
+function firstDefined(object, keys, fallback = '') {
+  for (const key of keys) {
+    if (hasOwn(object, key) && object[key] !== undefined && object[key] !== null) return object[key];
+  }
+  return fallback;
+}
+
+/**
+ * 把保存表单或导入卡片整理成角色数据；导入时保留未专门处理的标准字段，
+ * 例如 character_book、extensions 和自定义扩展，避免再次保存时把卡片削薄。
+ */
+function normalizeCharacterData(data = {}, existing = null) {
+  const source = {
+    ...(existing?.charData && typeof existing.charData === 'object' ? existing.charData : {}),
+    ...(data?.cardData && typeof data.cardData === 'object' ? data.cardData : {}),
+  };
+  const name = firstDefined(data, ['name'], firstDefined(source, ['name'], existing?.name || 'New Character'));
+  const description = firstDefined(
+    data,
+    ['description', 'prompt'],
+    firstDefined(source, ['description', 'personality', 'prompt'], existing?.prompt || ''),
+  );
+  const personality = firstDefined(
+    data,
+    ['personality', 'prompt'],
+    firstDefined(source, ['personality', 'description', 'prompt'], existing?.prompt || ''),
+  );
+  const scenario = firstDefined(data, ['scenario'], firstDefined(source, ['scenario'], existing?.scenario || ''));
+  const firstMessage = firstDefined(
+    data,
+    ['first_mes', 'greeting'],
+    firstDefined(source, ['first_mes', 'greeting'], existing?.greeting || ''),
+  );
+  const exampleDialogue = firstDefined(
+    data,
+    ['mes_example', 'exampleDialogue'],
+    firstDefined(source, ['mes_example', 'exampleDialogue'], existing?.exampleDialogue || ''),
+  );
+  const creatorNotes = firstDefined(
+    data,
+    ['creator_notes', 'creatorNotes'],
+    firstDefined(source, ['creator_notes', 'creatorNotes'], ''),
+  );
+  const systemPrompt = firstDefined(data, ['system_prompt', 'systemPrompt'], firstDefined(source, ['system_prompt'], ''));
+  const postHistoryInstructions = firstDefined(
+    data,
+    ['post_history_instructions', 'postHistoryInstructions'],
+    firstDefined(source, ['post_history_instructions'], ''),
+  );
+  const tags = firstDefined(data, ['tags'], firstDefined(source, ['tags'], []));
+  const extensions = firstDefined(data, ['extensions'], firstDefined(source, ['extensions'], {}));
+  const characterBook = firstDefined(data, ['character_book', 'characterBook'], firstDefined(source, ['character_book'], null));
+
+  return {
+    ...source,
+    name: String(name || 'New Character'),
+    description: String(description || ''),
+    personality: String(personality || ''),
+    scenario: String(scenario || ''),
+    first_mes: String(firstMessage || ''),
+    mes_example: String(exampleDialogue || ''),
+    creator_notes: String(creatorNotes || ''),
+    system_prompt: String(systemPrompt || ''),
+    post_history_instructions: String(postHistoryInstructions || ''),
+    tags: Array.isArray(tags) ? tags : [],
+    creator: String(firstDefined(data, ['creator'], firstDefined(source, ['creator'], '')) || ''),
+    character_version: String(firstDefined(data, ['character_version', 'characterVersion'], firstDefined(source, ['character_version'], '1.0')) || '1.0'),
+    extensions: extensions && typeof extensions === 'object' ? extensions : {},
+    character_book: characterBook && typeof characterBook === 'object' ? characterBook : null,
+    create_date: firstDefined(data, ['create_date'], firstDefined(source, ['create_date'], existing?.createdAt || new Date().toISOString())),
+    id: safeCharacterId(firstDefined(data, ['id'], firstDefined(source, ['id'], existing?.id || ''))),
+  };
 }
 
 /**
@@ -157,72 +296,73 @@ export async function getCharacter(charId, ctx = {}) {
 }
 
 /**
- * Create a new character (保存为 JSON 文件)
+ * Create a new character（保存为 SillyTavern 可识别的 PNG 角色卡）
  */
-export async function createCharacter(data, ctx = {}) {
+export async function createCharacter(data = {}, ctx = {}, options = {}) {
   const charDir = paths(ctx).characters;
-  const id = data.id || generateId();
-  const now = new Date().toISOString();
+  mkdirSync(charDir, { recursive: true });
+  const character = normalizeCharacterData(data);
+  const filePath = join(charDir, `${character.id}.png`);
+  await writeCharacterPng(filePath, character, options.avatarPng);
 
-  const character = {
-    name: data.name || 'New Character',
-    description: data.prompt || '',
-    personality: data.prompt || '',
-    scenario: data.scenario || '',
-    first_mes: data.greeting || '',
-    mes_example: data.exampleDialogue || '',
-    creator_notes: data.creatorNotes || '',
-    system_prompt: '',
-    post_history_instructions: '',
-    tags: Array.isArray(data.tags) ? data.tags : [],
-    creator: '',
-    character_version: '1.0',
-    extensions: {},
-    create_date: now,
-    id,
-  };
-
-  const filePath = join(charDir, `${id}.json`);
-  writeFileSync(filePath, JSON.stringify({ data: character }, null, 2), 'utf-8');
-
-  return { ...character, id };
+  return { ...character, fileName: `${character.id}.png` };
 }
 
 /**
- * Import a character from JSON text
+ * Import a character from JSON, YAML, or PNG.
+ * PNG 导入保留原头像；JSON/YAML 导入保留标准 data 字段和自定义 extensions。
  */
-export async function importCharacter(input, ctx = {}) {
-  let raw;
+export async function importCharacter(input = {}, ctx = {}) {
+  let parsed;
+  let avatarPng = null;
+
   if (input.text) {
-    raw = input.text;
-  } else if (input.filePath) {
-    if (!existsSync(input.filePath)) {
-      return { error: `File not found: ${input.filePath}` };
+    const raw = String(input.text);
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      try { parsed = parseYaml(raw); } catch (error) { return { error: `Parse error: ${error.message}` }; }
     }
-    raw = readFileSync(input.filePath, 'utf-8');
+  } else if (input.filePath) {
+    if (!existsSync(input.filePath)) return { error: `File not found: ${input.filePath}` };
+    let buffer;
+    try {
+      buffer = readFileSync(input.filePath);
+    } catch (error) {
+      return { error: `Read error: ${error.message}` };
+    }
+    if (isPng(buffer)) {
+      const card = readEmbeddedCard(buffer);
+      if (!card || typeof card !== 'object') return { error: 'PNG 中没有可识别的角色卡数据。' };
+      parsed = card;
+      avatarPng = buffer;
+    } else {
+      const raw = buffer.toString('utf8');
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        try { parsed = parseYaml(raw); } catch (error) { return { error: `Parse error: ${error.message}` }; }
+      }
+    }
   } else {
     return { error: 'Must provide text or filePath' };
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (e) {
-    return { error: `Parse error: ${e.message}` };
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { error: '角色卡内容必须是对象。' };
   }
-
-  const data = parsed.data || parsed;
-  const name = data.name || input.fallbackName || 'Imported Character';
-
-  return await createCharacter({
-    name,
-    prompt: data.description || data.personality || data.system_prompt || data.prompt || '',
-    greeting: data.first_mes || data.greeting || '',
-    scenario: data.scenario || '',
-    exampleDialogue: data.mes_example || data.exampleDialogue || '',
-    creatorNotes: data.creator_notes || data.creatorNotes || '',
-    tags: data.tags || [],
-  }, ctx);
+  const data = parsed.data && typeof parsed.data === 'object' ? parsed.data : parsed;
+  const charDir = paths(ctx).characters;
+  const requestedId = input.id || data.id;
+  const safeRequestedId = requestedId ? safeCharacterId(requestedId) : '';
+  const requestedPath = safeRequestedId ? join(charDir, `${safeRequestedId}.png`) : '';
+  // 导入同一目录里的 PNG 时不能原地覆盖来源卡；外部卡若没有冲突则保留其 id。
+  const id = requestedPath && !existsSync(requestedPath) ? safeRequestedId : generateId();
+  return createCharacter({
+    cardData: data,
+    id,
+    name: data.name || input.fallbackName || 'Imported Character',
+  }, ctx, { avatarPng });
 }
 
 /**
@@ -232,29 +372,22 @@ export async function updateCharacter(data, ctx = {}) {
   const existing = await getCharacter(data.id || data.name, ctx);
   if (!existing) return null;
 
-  // 覆盖写入 JSON 文件（不修改原 PNG）
+  // 更新仍写回 PNG；若目标原来只有 JSON，则新建同 ID 的 PNG，旧 JSON 保留作兼容备份。
   const charDir = paths(ctx).characters;
-  const updated = {
-    name: data.name || existing.name,
-    description: data.prompt || existing.prompt || '',
-    personality: data.prompt || existing.prompt || '',
-    scenario: data.scenario || existing.scenario || '',
-    first_mes: data.greeting || existing.greeting || '',
-    mes_example: data.exampleDialogue || existing.exampleDialogue || '',
-    creator_notes: data.creatorNotes || existing.creatorNotes || '',
-    system_prompt: '',
-    post_history_instructions: '',
-    tags: Array.isArray(data.tags) ? data.tags : existing.tags || [],
-    creator: '',
-    character_version: '1.1',
-    extensions: {},
-    create_date: existing.createdAt || new Date().toISOString(),
-    id: existing.id,
-  };
+  mkdirSync(charDir, { recursive: true });
+  const updated = normalizeCharacterData({ ...data, id: existing.id }, existing);
 
-  const filePath = join(charDir, `${existing.id}.json`);
-  writeFileSync(filePath, JSON.stringify({ data: updated }, null, 2), 'utf-8');
-  return updated;
+  const filePath = existing._fileType === 'png' && existing._filePath
+    ? existing._filePath
+    : join(charDir, `${existing.id}.png`);
+  const avatarPath = existing._fileType === 'png' ? filePath : null;
+  const avatarPng = await readAvatarPng(avatarPath, DEFAULT_CHARACTER_AVATAR_PATH);
+  writeFileSync(filePath, embedCharacterCardPng(avatarPng, {
+    spec: 'chara_card_v2',
+    spec_version: '2.0',
+    data: updated,
+  }));
+  return { ...updated, fileName: basename(filePath) };
 }
 
 /**
