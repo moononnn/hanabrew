@@ -49,11 +49,17 @@ function appendDepsLog(line) {
 function runNpmCi(registry, stDir = ST_DIR, timeoutMs = INSTALL_TIMEOUT_MS) {
   return new Promise((resolve) => {
     const npmCli = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
-    const useNode = existsSync(npmCli);
     const common = ['ci', '--no-audit', '--no-fund', '--registry', registry];
-    const child = useNode
+    // 优先用 Node 自带的 npm-cli.js，完全不经 shell。
+    // 找不到时才兜底：Windows 用 cmd.exe /c（参数是固定常量列表，不做 shell 字符串拼接），
+    // 其他平台直接找 npm可执行文件。
+    // 不能写成 spawn('npm.cmd', ..., { shell: false })：Node 18.20.2+ 对 .cmd/.bat 要求 shell: true，
+    // 直接 spawn 会抛 EINVAL（已在本机 Node 24 复现）。
+    const child = existsSync(npmCli)
       ? spawn(process.execPath, [npmCli, ...common], { cwd: stDir, windowsHide: true })
-      : spawn('npm', common, { cwd: stDir, shell: true, windowsHide: true });
+      : process.platform === 'win32'
+        ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', ['npm', ...common].join(' ')], { cwd: stDir, windowsHide: true })
+        : spawn('npm', common, { cwd: stDir, windowsHide: true });
 
     let output = '';
     let settled = false;

@@ -9,13 +9,18 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 
-const STORE_VERSION = 2;
+const STORE_VERSION = 4;
 const DEFAULT_STATE = {
   version: STORE_VERSION,
   activeCharacterId: null,
   activeChatId: null,
   activeRoomId: null,
   currentSession: null,
+  // 多来访者：每个元素是 { agentId, characterId, characterName, sessionId, sessionPath, ... }
+  visitors: [],
+  // 兼容旧数据：v3 的单个 visitor 字段（首次读取时迁移进 visitors）
+  visitor: null,
+  pendingVisitorCleanup: [],
   pluginLoadedAt: null,
   pluginUnloadedAt: null,
 };
@@ -79,14 +84,21 @@ export async function ensureStore(ctx = {}) {
 }
 
 /**
- * Read plugin state
+ * Read plugin state，并在读取时把 v3 的单个 visitor 迁移进 visitors 数组。
+ * 迁移只在内存里做一次（writeState 落盘），不直接改文件，避免并发写冲突。
  */
 export async function readState(ctx = {}) {
   const stateFile = paths(ctx).stateFile;
   try {
     if (existsSync(stateFile)) {
       const raw = readFileSync(stateFile, "utf-8");
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.visitor && !Array.isArray(parsed.visitors)) {
+        parsed.visitors = [parsed.visitor];
+        delete parsed.visitor;
+      }
+      if (parsed && !Array.isArray(parsed.visitors)) parsed.visitors = [];
+      return parsed;
     }
   } catch (e) {
     ctx.log?.warn?.("[hanabrew] Failed to read state:", e.message);
@@ -100,6 +112,7 @@ export async function readState(ctx = {}) {
 export async function writeState(state, ctx = {}) {
   const stateFile = paths(ctx).stateFile;
   try {
+    mkdirSync(dirname(stateFile), { recursive: true });
     writeFileSync(stateFile, JSON.stringify({ ...state, version: STORE_VERSION }, null, 2), "utf-8");
   } catch (e) {
     ctx.log?.error?.("[hanabrew] Failed to write state:", e.message);
