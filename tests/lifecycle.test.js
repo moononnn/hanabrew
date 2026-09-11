@@ -36,6 +36,34 @@ test('酒馆默认主题指向内置的「薄荷手帐 · 简约」', () => {
   assert.equal(settings.power_user.theme, '薄荷手帐 · 简约');
 });
 
+test('内置主题只在目标缺失时写入，不覆盖已有文件', async () => {
+  const { installBundledThemes } = await import('../index.js');
+  const { join } = await import('node:path');
+  const { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+
+  const sandbox = join(tmpdir(), `hanabrew-test-${Date.now()}`);
+  const prevAppData = process.env.APPDATA;
+  process.env.APPDATA = sandbox;
+  try {
+    const themeDir = join(sandbox, 'hanabrew', 'st-data', 'default-user', 'themes');
+    const themeFile = join(themeDir, '薄荷手帐 · 简约.json');
+
+    // 首次：缺失时写入
+    installBundledThemes({});
+    assert.ok(existsSync(themeFile), '首次应写入内置主题');
+
+    // 再次：用户改过之后不被覆盖
+    writeFileSync(themeFile, '{"name":"用户自己改过的主题"}', 'utf8');
+    installBundledThemes({});
+    assert.equal(readFileSync(themeFile, 'utf8'), '{"name":"用户自己改过的主题"}', '已有文件不得被覆盖');
+  } finally {
+    if (prevAppData === undefined) delete process.env.APPDATA;
+    else process.env.APPDATA = prevAppData;
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
 test('干净安装包未装依赖时，插件入口不会静态加载 YAML', () => {
   assert.doesNotMatch(charactersSource, /from ['\"]yaml['\"]/);
   assert.match(charactersSource, /require\(['\"]yaml['\"]\)/);

@@ -38,7 +38,7 @@ function installBundledSkill(ctx) {
 }
 
 /** 同步内置主题到酒馆用户主题目录；仅缺失时写入，不覆盖用户自己的改动 */
-function installBundledThemes(ctx) {
+export function installBundledThemes(ctx) {
   const themeFile = '薄荷手帐 · 简约.json';
   const themeSrc = join(__dirname, 'sillytavern', 'default', 'content', 'themes', themeFile);
   if (!existsSync(themeSrc)) return;
