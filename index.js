@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, copyFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
-import { ensureStore, readState, writeState } from './backend/store.js';
+import { ensureStore, readState, writeState, stDataRoot } from './backend/store.js';
 import { cleanupDepartedVisitors } from './backend/visitors.js';
 import { startThemeSync, stopThemeSync } from './backend/theme-sync.js';
 import { stopSillyTavernTheater } from './backend/st-runtime.js';
@@ -37,8 +37,26 @@ function installBundledSkill(ctx) {
   }
 }
 
+/** 同步内置主题到酒馆用户主题目录；仅缺失时写入，不覆盖用户自己的改动 */
+function installBundledThemes(ctx) {
+  const themeFile = '薄荷手帐 · 简约.json';
+  const themeSrc = join(__dirname, 'sillytavern', 'default', 'content', 'themes', themeFile);
+  if (!existsSync(themeSrc)) return;
+  try {
+    const themeDir = join(stDataRoot(ctx), 'themes');
+    const themeDst = join(themeDir, themeFile);
+    if (existsSync(themeDst)) return;
+    mkdirSync(themeDir, { recursive: true });
+    copyFileSync(themeSrc, themeDst);
+    ctx.log?.info?.(`[hanabrew] 内置主题 "${themeFile}" 已安装到 ${themeDir}`);
+  } catch (e) {
+    ctx.log?.warn?.(`[hanabrew] 内置主题安装失败: ${e.message}`);
+  }
+}
+
 export async function onload(ctx = {}) {
   installBundledSkill(ctx);
+  installBundledThemes(ctx);
   ctx.log?.info?.('[hanabrew] onload...');
   await ensureStore(ctx);
   await cleanupDepartedVisitors(ctx);
