@@ -44,7 +44,7 @@ default-enabled: true
 
 正式入口必须是真实 SillyTavern 运行时。固定测卡使用 `hanabrew-theater-*` 临时聊天；代笔对戏使用 `hanabrew-duet-*` 临时聊天并在结束时清理。正式聊天变量既不读取也不修改，Hana 侧 `mvu-state.json` 也不参与。若 ST、浏览器或模型不可用，工具应报告失败，不能把后端提示词预检冒充真实回复。旧的 `runPromptPreview` 仅用于明确标注的「卡片上下文预检」。
 
-`Mvu` 是酒馆侧 MVU 扩展提供的全局 API，`yue-assistant` 是读取/使用它的扩展，两者职责不同。真实运行时会直接读取当前 ST 页面里的 `Mvu.getMvuData({ type: 'chat' })`；如果变量在当前回合不可用，结果必须标记为不可用，不能把缺失写成 `{}`。
+`Mvu` 是酒馆侧 MVU 扩展提供的全局 API，读取和使用它的扩展与花酿职责不同。真实运行时会直接读取当前 ST 页面里的 `Mvu.getMvuData({ type: 'chat' })`；如果变量在当前回合不可用，结果必须标记为不可用，不能把缺失写成 `{}`。
 
 ## 效率分工
 
