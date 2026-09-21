@@ -417,7 +417,7 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
 <body>
 <div class="card">
   <div class="title">花酿酒馆</div>
-  <div class="subtitle">SillyTavern 1.18.0 原生引擎 · 助手实时调试</div>
+  <div class="subtitle">SillyTavern 1.19.0 原生引擎 · 助手实时调试</div>
 
   <div class="row">
     <div class="icon ${serverRunning ? "ok" : "err"}">${serverRunning ? "OK" : "X"}</div>
@@ -434,7 +434,7 @@ function renderStatusPage({ serverRunning, serverUrl, browser, error, stLog }) {
   ${logSection}
 
   <div class="footer">
-    ${pluginVersion() ? `花酿 v${pluginVersion()} · ` : ''}ST 1.18.0 原生引擎 · 独立 Edge 窗口运行
+    ${pluginVersion() ? `花酿 v${pluginVersion()} · ` : ''}ST 1.19.0 原生引擎 · 独立 Edge 窗口运行
   </div>
 </div>
 </body>
@@ -527,7 +527,7 @@ ${refresh}
 <body>
 <div class="card">
   <div class="title">花酿酒馆</div>
-  <div class="subtitle">SillyTavern 1.18.0 原生引擎 · 助手实时调试</div>
+  <div class="subtitle">SillyTavern 1.19.0 原生引擎 · 助手实时调试</div>
   ${body}
   ${detail}
 </div>

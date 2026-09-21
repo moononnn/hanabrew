@@ -1,0 +1,68 @@
+/* Hana Theme: 小花薄荷手帐 · 暖米白、薄荷墨水与樱花粉 */
+[data-theme="xiaohua-mint"] {
+  color-scheme: light;
+  --bg: #F7F4EA;
+  --bg-card: #FFFDF8;
+  --bg-glass: rgba(255, 253, 248, .93);
+  --bg-texture: url("data:image/svg+xml,%3Csvg width='28' height='28' viewBox='0 0 28 28' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1.5' cy='1.5' r='.65' fill='%235DAE8E' fill-opacity='.17'/%3E%3C/svg%3E");
+  --accent: #5DAE8E;
+  --accent-hover: #4B967A;
+  --accent-light: rgba(93, 174, 142, .11);
+  --accent-rgb: 93, 174, 142;
+  --text: #40534B;
+  --text-light: #66776F;
+  --text-muted: #8A9992;
+  --hana-text: #31473E;
+  --border: rgba(93, 174, 142, .22);
+  --shadow: rgba(64, 83, 75, .09);
+  --sidebar-bg: #EEF3EA;
+  --coral: #E89BB0;
+  --coral-rgb: 232, 155, 176;
+  --green: #70A88D;
+  --green-rgb: 112, 168, 141;
+  --danger: #A65C68;
+  --danger-rgb: 166, 92, 104;
+  --jian-note-bg: #FFF9E9;
+  --jian-note-border: rgba(185, 158, 103, .17);
+  --mood-bg: rgba(232, 155, 176, .07);
+  --mood-text: #9A6071;
+  --mood-border: rgba(232, 155, 176, .22);
+  --tool-bg: rgba(64, 83, 75, .035);
+  --tool-text: #66776F;
+  --user-bg: rgba(93, 174, 142, .10);
+  --drop-overlay-bg: rgba(247, 244, 234, .88);
+  --attach-bg: rgba(64, 83, 75, .045);
+  --overlay-subtle: rgba(64, 83, 75, .03);
+  --overlay-light: rgba(64, 83, 75, .05);
+  --overlay-medium: rgba(64, 83, 75, .08);
+  --overlay-strong: rgba(64, 83, 75, .15);
+  --select-arrow: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235DAE8E' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  --term-bg: #FFFDF8;
+  --term-fg: #40534B;
+  --term-cursor: #5DAE8E;
+  --term-cursor-accent: #F7F4EA;
+  --term-selection-bg: #BFDCCD66;
+  --term-ansi-black: #31473E;
+  --term-ansi-red: #B96770;
+  --term-ansi-green: #5F9278;
+  --term-ansi-yellow: #9B7D43;
+  --term-ansi-blue: #587F90;
+  --term-ansi-magenta: #996D89;
+  --term-ansi-cyan: #578D8A;
+  --term-ansi-white: #DED9CF;
+  --term-ansi-bright-black: #7B8982;
+  --term-ansi-bright-red: #CF7A84;
+  --term-ansi-bright-green: #75AA8D;
+  --term-ansi-bright-yellow: #B08F50;
+  --term-ansi-bright-blue: #6E96A8;
+  --term-ansi-bright-magenta: #B181A0;
+  --term-ansi-bright-cyan: #70A5A1;
+  --term-ansi-bright-white: #F5F1E8;
+}
+[data-theme="xiaohua-mint"] *::-webkit-scrollbar { width: 8px; height: 8px; }
+[data-theme="xiaohua-mint"] *::-webkit-scrollbar-track { background: transparent; }
+[data-theme="xiaohua-mint"] *::-webkit-scrollbar-thumb { border: 2px solid var(--bg); border-radius: 99px; background: #C9DFD3; }
+[data-theme="xiaohua-mint"] *::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+[data-theme="xiaohua-mint"] * { scrollbar-color: #C9DFD3 transparent; scrollbar-width: thin; }
+html[data-theme="xiaohua-mint"] body { background-color: var(--bg); background-image: radial-gradient(circle at 1px 1px, rgba(93, 174, 142, .10) .7px, transparent .8px); background-size: 24px 24px; }
+html[data-theme="xiaohua-mint"] ::selection { background: rgba(232, 155, 176, .26); color: var(--text); }

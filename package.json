@@ -1,7 +1,7 @@
 {
   "name": "hanabrew",
-  "version": "1.1.37",
-  "description": "花酿酒馆 v1.1.37 — 内嵌酒馆内置跟随 Hana 黑白主题的皮肤；角色卡体检支持真实测卡与按节奏连续代笔对戏。",
+  "version": "1.1.50",
+  "description": "花酿酒馆 v1.1.50 — 修正内置扩展自动更新提示。",
   "type": "module",
   "main": "index.js",
   "license": "AGPL-3.0",

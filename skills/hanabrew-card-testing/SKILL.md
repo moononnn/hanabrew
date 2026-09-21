@@ -6,7 +6,7 @@ default-enabled: true
 
 # 花酿测卡流程
 
-花酿是 HanaAgent 的社区插件，在 Hana 内部原生运行 SillyTavern 1.18.0。写卡后用本 skill 完成剩余步骤：打包 → 导入花酿 → 验证。
+花酿是 HanaAgent 的社区插件，在 Hana 内部原生运行 SillyTavern 1.19.0。写卡后用本 skill 完成剩余步骤：打包 → 导入花酿 → 验证。
 
 ## 用户不需要记住 skill 名称
 

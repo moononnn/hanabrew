@@ -466,6 +466,10 @@ test('小剧场页面注册说明页与试演 API，内联脚本可编译', () =
   assert.deepEqual(registered, [['GET', '/card/theater'], ['GET', '/card/theater/progress'], ['POST', '/card/theater/handoff'], ['POST', '/card/theater/control']]);
   const html = renderTheater({ characters: [{ id: 'c1', name: '角色甲' }], activeCharacterId: 'c1' });
   assert.match(html, /卡片实验室/);
+  assert.match(html, /href="\.\/visitor"/);
+  assert.match(html, /← 返回工作台/);
+  const authedHtml = renderTheater({ characters: [{ id: 'c1', name: '角色甲' }], backHref: './visitor?mode=home&amp;pluginSurfaceSession=surface-123' });
+  assert.match(authedHtml, /pluginSurfaceSession=surface-123/);
   assert.match(html, /角色卡体检/);
   assert.match(html, /帮我测一下这张角色卡/);
   assert.match(html, /透明的测试聊天/);

@@ -19,6 +19,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { paths } from '../backend/store.js';
 import { escapeHtml, initials } from '../lib/html.js';
+import { getThemeStatus, installMintTheme, restoreMintTheme } from '../lib/theme-runtime.js';
 
 function renderCharacters(characters, ctx = {}, visitorByCharacter = {}) {
   if (!characters.length) {
@@ -84,18 +85,28 @@ function modeHref(mode, surfaceSession = '', legacyToken = '') {
   return query ? `?${query}` : '?';
 }
 
+function theaterHref(surfaceSession = '', legacyToken = '') {
+  const params = new URLSearchParams();
+  if (surfaceSession) params.set('pluginSurfaceSession', surfaceSession);
+  if (legacyToken) params.set('token', legacyToken);
+  const query = params.toString();
+  return `./theater${query ? `?${query}` : ''}`;
+}
+
 function renderDirectionHome(visitors, surfaceSession, legacyToken) {
   const toHana = modeHref('to-hana', surfaceSession, legacyToken);
   const toTavern = modeHref('to-tavern', surfaceSession, legacyToken);
+  const toTheater = theaterHref(surfaceSession, legacyToken);
+  const toTheme = modeHref('theme', surfaceSession, legacyToken);
   return `<header class="hero">
     <div>
-      <p class="eyebrow">花酿 · 来访</p>
-      <h1>想让谁来坐坐？</h1>
-      <p>这里有两扇门：请酒馆里的角色来 Hana，或把一位 Hana 伙伴带去酒馆。每次都是独立快照，方向清清楚楚。</p>
+      <p class="eyebrow">花酿 · 工作台</p>
+      <h1>想从哪里开始？</h1>
+      <p>角色来访、伙伴出口和角色卡体检都收在这里。每个功能各自清楚，入口只留一张卡。</p>
     </div>
-    <div class="hero-mark" aria-hidden="true">访</div>
+    <div class="hero-mark" aria-hidden="true">酿</div>
   </header>
-  <section class="direction-grid" aria-label="角色来访方向">
+  <section class="direction-grid" aria-label="花酿功能入口">
     <a class="direction-card is-mint" href="${escapeHtml(toHana)}">
       <span class="direction-mark" aria-hidden="true">来</span>
       <span class="direction-copy">
@@ -114,25 +125,58 @@ function renderDirectionHome(visitors, surfaceSession, legacyToken) {
       </span>
       <span class="direction-arrow" aria-hidden="true">→</span>
     </a>
+    <a class="direction-card is-theater" href="${escapeHtml(toTheater)}">
+      <span class="direction-mark" aria-hidden="true">测</span>
+      <span class="direction-copy">
+        <p class="eyebrow">角色卡体检 · 代笔对戏</p>
+        <h2>打开卡片实验室</h2>
+        <p>在真实 SillyTavern 运行时里检查人设、世界书、MVU 和场景逻辑，也可以开始代笔对戏。</p>
+      </span>
+      <span class="direction-arrow" aria-hidden="true">→</span>
+    </a>
+    <a class="direction-card is-mint" href="${escapeHtml(toTheme)}">
+      <span class="direction-mark" aria-hidden="true">簿</span>
+      <span class="direction-copy">
+        <p class="eyebrow">花酿 · 外观</p>
+        <h2>管理小花薄荷手帐</h2>
+        <p>把薄荷手帐主题装进 Hana 当前前端，更新后也能从花酿这里装回。</p>
+      </span>
+      <span class="direction-arrow" aria-hidden="true">→</span>
+    </a>
   </section>
   ${visitors.length
     ? `<p class="home-current">当前有 <b>${escapeHtml(visitors.length)}</b> 位角色在 Hana 做客，进入对应方向可以继续管理。</p>`
-    : '<p class="home-current is-empty">两边都可以随时进，选一扇门开始就好。</p>'}`;
+    : '<p class="home-current is-empty">选一个入口开始就好，其他功能都在这张工作台里。</p>'}`;
 }
 
 function renderDetailHero(mode, surfaceSession, legacyToken) {
   const toTavern = mode === 'to-tavern';
+  const theme = mode === 'theme';
   return `<header class="hero detail-hero">
     <div>
-      <a class="back-link" href="${escapeHtml(modeHref('home', surfaceSession, legacyToken))}">← 返回角色来访</a>
-      <p class="eyebrow">${toTavern ? 'Hana 伙伴 → 酒馆' : '酒馆角色 → Hana'}</p>
-      <h1>${toTavern ? '带一位 Hana 伙伴去酒馆' : '请一位酒馆角色来 Hana'}</h1>
-      <p>${toTavern
+      <a class="back-link" href="${escapeHtml(modeHref('home', surfaceSession, legacyToken))}">← 返回花酿工作台</a>
+      <p class="eyebrow">${theme ? '花酿 · 外观' : (toTavern ? 'Hana 伙伴 → 酒馆' : '酒馆角色 → Hana')}</p>
+      <h1>${theme ? '小花薄荷手帐' : (toTavern ? '带一位 Hana 伙伴去酒馆' : '请一位酒馆角色来 Hana')}</h1>
+      <p>${theme ? '主题属于花酿的酒馆体验，安装和恢复都从这里完成，不再单独占一张 Hana 卡。' : (toTavern
         ? '导出一张独立角色卡，带上性格与清洗后的相处回忆。酒馆里的经历不会回写 Hana。'
-        : '从酒馆挑一张角色卡，带上设定和最近回忆，在 Hana 开一段独立的临时会话。'}</p>
+        : '从酒馆挑一张角色卡，带上设定和最近回忆，在 Hana 开一段独立的临时会话。')}</p>
     </div>
-    <div class="hero-mark" aria-hidden="true">${toTavern ? '去' : '来'}</div>
+    <div class="hero-mark" aria-hidden="true">${theme ? '簿' : (toTavern ? '去' : '来')}</div>
   </header>`;
+}
+
+function renderThemeBody(status) {
+  const state = status.installed ? '已安装到当前 Hana 前端' : (status.error ? `暂时无法检查：${status.error}` : '还没有安装');
+  return `<section class="detail-panel theme-panel">
+    <div class="panel-head"><strong>主题状态</strong><span>${escapeHtml(status.version || '未检测到')}</span></div>
+    <p class="home-current">${escapeHtml(state)}</p>
+    <p class="theme-note">安装会先保存当前前端文件；如果 Hana 更新了前端，花酿会在启动时尝试把主题装回。改完后需要重启 Hana 才能在外观设置里看到它。</p>
+    <div class="visitor-actions theme-actions">
+      <button class="primary" id="install-theme" type="button">安装到主题列表</button>
+      <button class="secondary" id="restore-theme" type="button">恢复原文件</button>
+      <span class="status" id="theme-status" role="status" aria-live="polite"></span>
+    </div>
+  </section>`;
 }
 
 function renderToHanaBody(characters, visitors, visitorByCharacter, ctx) {
@@ -173,14 +217,14 @@ export function renderVisitorPage({ characters = [], visitors = [] }, ctx = {}, 
     if (!visitor?.characterId) continue;
     visitorByCharacter[visitor.characterId] = visitor.residence === true ? 'resident' : 'visiting';
   }
-  const mode = options.mode === 'to-tavern' || options.mode === 'to-hana' ? options.mode : 'home';
+  const mode = ['to-tavern', 'to-hana', 'theme'].includes(options.mode) ? options.mode : 'home';
   const surfaceSession = String(options.surfaceSession || '');
   const legacyToken = String(options.legacyToken || '');
   const pageBody = mode === 'home'
     ? renderDirectionHome(visitors, surfaceSession, legacyToken)
-    : `${renderDetailHero(mode, surfaceSession, legacyToken)}${mode === 'to-tavern'
-      ? renderToTavernBody()
-      : renderToHanaBody(characters, visitors, visitorByCharacter, ctx)}`;
+    : `${renderDetailHero(mode, surfaceSession, legacyToken)}${mode === 'theme'
+      ? renderThemeBody(options.themeStatus || {})
+      : (mode === 'to-tavern' ? renderToTavernBody() : renderToHanaBody(characters, visitors, visitorByCharacter, ctx))}`;
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -229,8 +273,12 @@ export function renderVisitorPage({ characters = [], visitors = [] }, ctx = {}, 
   .direction-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 15px; min-width: 0; padding: 22px 20px; border: 1px solid var(--line); border-radius: 20px; color: var(--ink); background: var(--white); box-shadow: var(--shadow); text-decoration: none; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
   .direction-card:hover { transform: translateY(-2px); border-color: #acd5c2; box-shadow: 0 18px 42px rgba(112, 83, 65, .14); }
   .direction-card.is-pink:hover { border-color: #e8b9c8; }
+  .direction-card.is-theater { grid-column: 1 / -1; }
+  .direction-card.is-theater:hover { border-color: #d8c49e; }
+  .direction-card.is-mint:hover { border-color: #acd5c2; }
   .direction-mark { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; color: var(--mint-deep); background: var(--mint-soft); font-size: 23px; }
   .direction-card.is-pink .direction-mark { color: #a4536b; background: var(--pink-soft); }
+  .direction-card.is-theater .direction-mark { color: #9a7441; background: #f5ead3; }
   .direction-copy { display: grid; min-width: 0; gap: 4px; }
   .direction-copy .eyebrow { margin: 0; }
   .direction-copy h2 { margin: 0; font-size: 19px; line-height: 1.35; }
@@ -238,10 +286,15 @@ export function renderVisitorPage({ characters = [], visitors = [] }, ctx = {}, 
   .direction-arrow { color: #a9a199; font-size: 25px; line-height: 1; }
   .direction-card.is-mint .direction-arrow { color: var(--mint); }
   .direction-card.is-pink .direction-arrow { color: var(--pink); }
+  .direction-card.is-theater .direction-arrow { color: #c49a62; }
   .home-current { margin: 16px 2px 0; color: var(--muted); font: 12px/1.6 system-ui, sans-serif; }
   .home-current b { color: var(--ink); }
   .home-current.is-empty { color: #9b938b; }
   .detail-panel { margin-top: 22px; }
+  .theme-panel { padding: 0 20px 22px; border: 1px solid var(--line); border-radius: 20px; background: var(--white); box-shadow: var(--shadow); }
+  .theme-panel .panel-head { margin: 0 -20px; }
+  .theme-note { margin: 12px 2px 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+  .theme-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
   .workspace { display: grid; grid-template-columns: minmax(280px, .9fr) minmax(340px, 1.1fr); gap: 20px; margin-top: 22px; }
   .panel { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: var(--white); box-shadow: var(--shadow); }
   .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 18px 13px; border-bottom: 1px solid var(--line); background: var(--paper-2); }
@@ -660,6 +713,24 @@ export function renderVisitorPage({ characters = [], visitors = [] }, ctx = {}, 
   document.querySelectorAll('.settle').forEach(function (button) {
     bindAction(button, 'card/visitor/settle', '正在安排住处…', true);
   });
+  var installThemeButton = document.getElementById('install-theme');
+  var restoreThemeButton = document.getElementById('restore-theme');
+  var themeStatus = document.getElementById('theme-status');
+  async function themeAction(button, endpoint, busyText) {
+    if (!button) return;
+    button.disabled = true;
+    var originalText = button.textContent;
+    button.textContent = busyText;
+    if (themeStatus) themeStatus.textContent = '正在处理…';
+    try {
+      var result = await callApi(endpoint, {});
+      if (themeStatus) themeStatus.textContent = result.restartRequired ? '已完成，请重启 Hana 生效。' : '已完成。';
+    } catch (error) {
+      if (themeStatus) { themeStatus.className = 'status error'; themeStatus.textContent = error.message || '操作失败，请再试一次。'; }
+    } finally { button.disabled = false; button.textContent = originalText; }
+  }
+  if (installThemeButton) installThemeButton.addEventListener('click', function () { themeAction(installThemeButton, 'card/visitor/theme/install', '正在安装…'); });
+  if (restoreThemeButton) restoreThemeButton.addEventListener('click', function () { themeAction(restoreThemeButton, 'card/visitor/theme/restore', '正在恢复…'); });
   document.querySelectorAll('.uninvite').forEach(function (button) {
     button.addEventListener('click', async function () {
       var agentId = button.getAttribute('data-agent-id') || '';
@@ -723,8 +794,10 @@ export default function registerVisitorRoutes(app, ctx = {}) {
       getVisitorState(ctx),
     ]);
     const url = new URL(c.req.url, 'http://hana.local');
+    const mode = url.searchParams.get('mode') || 'home';
     return c.html(renderVisitorPage({ characters, visitors }, ctx, {
-      mode: url.searchParams.get('mode') || 'home',
+      mode,
+      themeStatus: mode === 'theme' ? getThemeStatus() : null,
       surfaceSession: url.searchParams.get('pluginSurfaceSession') || '',
       legacyToken: url.searchParams.get('token') || '',
     }));
@@ -783,6 +856,16 @@ export default function registerVisitorRoutes(app, ctx = {}) {
       ctx.log?.error?.('[hanabrew-export] export failed:', error.message);
       return c.json({ ok: false, error: error.message || '导出失败。' }, 500);
     }
+  });
+
+  app.post('/card/visitor/theme/install', async (c) => {
+    try { return c.json(installMintTheme()); }
+    catch (error) { ctx.log?.error?.('[hanabrew-theme] install failed:', error.message); return c.json({ ok: false, error: error.message || '主题安装失败。' }, 500); }
+  });
+
+  app.post('/card/visitor/theme/restore', async (c) => {
+    try { return c.json(restoreMintTheme()); }
+    catch (error) { ctx.log?.error?.('[hanabrew-theme] restore failed:', error.message); return c.json({ ok: false, error: error.message || '主题恢复失败。' }, 500); }
   });
 
   app.post('/card/visitor/invite', async (c) => {

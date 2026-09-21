@@ -527,7 +527,7 @@ test('送回时 session:update 失败会保留来访状态和 Agent 配置', asy
   await cleanupDepartedVisitors();
 });
 
-test('角色来访首页只展示两个方向入口并保留宿主会话凭证', () => {
+test('花酿工作台首页集中四种功能入口并保留宿主会话凭证', () => {
   const html = renderVisitorPage({
     characters: [{ id: 'guest', name: '阿岚', tags: [], avatarPath: '' }],
     visitors: [],
@@ -535,8 +535,12 @@ test('角色来访首页只展示两个方向入口并保留宿主会话凭证',
   assert.match(html, /class="direction-grid"/);
   assert.match(html, /href="\?mode=to-hana&amp;pluginSurfaceSession=surface-123"/);
   assert.match(html, /href="\?mode=to-tavern&amp;pluginSurfaceSession=surface-123"/);
+  assert.match(html, /href="\.\/theater\?pluginSurfaceSession=surface-123"/);
+  assert.match(html, /href="\?mode=theme&amp;pluginSurfaceSession=surface-123"/);
+  assert.match(html, /小花薄荷手帐/);
   assert.match(html, /酒馆角色 → Hana/);
   assert.match(html, /Hana 伙伴 → 酒馆/);
+  assert.match(html, /打开卡片实验室/);
   const main = html.match(/<main class="page">([\s\S]*?)<\/main>/)?.[1] || '';
   assert.doesNotMatch(main, /选择角色|exit-body/);
   const script = html.match(/<script>\n([\s\S]*?)\n<\/script>/)?.[1];
@@ -544,10 +548,20 @@ test('角色来访首页只展示两个方向入口并保留宿主会话凭证',
   assert.doesNotThrow(() => new Function(script));
 });
 
+test('薄荷手帐内部页面不再需要独立 Hana 卡片', () => {
+  const html = renderVisitorPage({ characters: [], visitors: [] }, {}, { mode: 'theme' });
+  assert.match(html, /管理小花薄荷手帐|小花薄荷手帐/);
+  assert.match(html, /card\/visitor\/theme\/install/);
+  assert.match(html, /card\/visitor\/theme\/restore/);
+  const main = html.match(/<main class="page">([\s\S]*?)<\/main>/)?.[1] || '';
+  assert.doesNotMatch(main, /direction-grid/);
+});
+
 test('角色来访兼容旧 token 页面导航与 API 请求', () => {
   const html = renderVisitorPage({ characters: [], visitors: [] }, {}, { mode: 'home', legacyToken: 'legacy+token' });
   assert.match(html, /href="\?mode=to-hana&amp;token=legacy%2Btoken"/);
   assert.match(html, /href="\?mode=to-tavern&amp;token=legacy%2Btoken"/);
+  assert.match(html, /href="\.\/theater\?token=legacy%2Btoken"/);
   const script = html.match(/<script>\n([\s\S]*?)\n<\/script>/)?.[1] || '';
   assert.match(script, /authParams\.get\('token'\)/);
   assert.match(script, /apiUrl.*token=/s);
@@ -693,7 +707,7 @@ test('角色列表为已在访/已入驻的角色显示状态标签', () => {
 
 test('manifest 注册角色来访整页卡、Agent 能力与路由', () => {
   const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
-  const card = manifest.contributes.cards.find((item) => item.id === 'visitor');
+  const card = manifest.contributes.cards.find((item) => item.id === 'workspace');
   assert.ok(card);
   assert.equal(card.route, '/card/visitor');
   assert.equal(card.realization, 'page');

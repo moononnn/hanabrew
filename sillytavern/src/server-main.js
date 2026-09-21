@@ -103,7 +103,7 @@ https.globalAgent = new https.Agent({ keepAlive: cliArgs.enableKeepAlive });
 const app = express();
 app.use(helmet({
     contentSecurityPolicy: false,
-    // Hana 内嵌酒馆通过本地 iframe 承载；保留 CSP 关闭策略，同时关闭默认跨源阻拦。
+    // Hana 内嵌酒馆通过本地 iframe 承载；关闭默认跨源阻拦。
     frameguard: false,
     crossOriginResourcePolicy: false,
 }));
@@ -346,6 +346,7 @@ async function preSetupTasks() {
         logAllowed: !!getConfigValue('privateAddressWhitelist.log.allowedRequests', false, 'boolean'),
         allowUnresolvedHosts: !!getConfigValue('privateAddressWhitelist.allowUnresolvedHosts', false, 'boolean'),
         enableKeepAlive: cliArgs.enableKeepAlive,
+        requestProxyEnabled: !!cliArgs.requestProxyEnabled,
     };
     initPrivateRequestFilter(requestFilterOptions);
 
@@ -490,3 +491,4 @@ initUserStorage(globalThis.DATA_ROOT)
     .then(apply404Middleware)
     .then(() => new ServerStartup(app, cliArgs).start())
     .then(postSetupTasks);
+

@@ -9,6 +9,7 @@ import { ensureStore, readState, writeState, stDataRoot } from './backend/store.
 import { cleanupDepartedVisitors } from './backend/visitors.js';
 import { startThemeSync, stopThemeSync } from './backend/theme-sync.js';
 import { stopSillyTavernTheater } from './backend/st-runtime.js';
+import { configure as configureTheme, autoRepairMintTheme } from './lib/theme-runtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -55,6 +56,8 @@ export function installBundledThemes(ctx) {
 }
 
 export async function onload(ctx = {}) {
+  configureTheme(ctx);
+  autoRepairMintTheme();
   installBundledSkill(ctx);
   installBundledThemes(ctx);
   ctx.log?.info?.('[hanabrew] onload...');

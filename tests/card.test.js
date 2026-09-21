@@ -42,17 +42,24 @@ test('内嵌酒馆页面输出本地 ST iframe 和 Hana 握手', () => {
   assert.match(html, /type: 'hana\.ready'/);
 });
 
-test('manifest 注册了插件页面（内嵌酒馆）与角色卡体检卡片', () => {
+test('manifest 注册两张独立卡片，且不再保留重复的旧酒馆页面入口', () => {
   const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
-  // contributes.page 是宿主插件页面入口（DSHana 同款机制），指向内嵌酒馆；同时兼容旧布局实例的恢复。
-  const page = manifest.contributes?.page;
-  assert.equal(page?.route, '/tavern');
-  assert.ok(page?.title, 'page contribution should carry a title');
-  const theaterCard = manifest.contributes?.cards?.find((item) => item.id === 'theater');
-  assert.equal(theaterCard?.type, 'webview');
-  assert.equal(theaterCard?.title, '花酿 · 体检');
-  assert.equal(theaterCard?.route, '/card/theater');
-  assert.match(theaterCard?.description || '', /帮我测一下这张角色卡/);
+  assert.equal(manifest.contributes?.page, undefined);
+  const cards = manifest.contributes?.cards || [];
+  assert.equal(cards.length, 2);
+  const workspaceCard = cards.find((item) => item.id === 'workspace');
+  const tavernCard = cards.find((item) => item.id === 'tavern');
+  assert.equal(workspaceCard?.type, 'webview');
+  assert.equal(workspaceCard?.title, '花酿·工作台');
+  assert.equal(workspaceCard?.route, '/card/visitor');
+  assert.equal(workspaceCard?.face?.image, 'workspace.png');
+  assert.match(workspaceCard?.description || '', /角色来访/);
+  assert.equal(tavernCard?.type, 'webview');
+  assert.equal(tavernCard?.title, '花酿·酒馆');
+  assert.equal(tavernCard?.route, '/tavern');
+  assert.equal(tavernCard?.face?.image, 'tavern.png');
+  assert.doesNotMatch(JSON.stringify(manifest), /内嵌酒馆/);
+  assert.doesNotMatch(JSON.stringify(cards), /轻聊/);
 });
 
 test('依赖失败页的「强制重试」走当前入口，不写死 /legacy', () => {
